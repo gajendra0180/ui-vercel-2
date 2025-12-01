@@ -1,6 +1,6 @@
 // Subgraph query utilities for IAO APIs
 
-const IAO_SUBGRAPH_URL = "https://api.goldsky.com/api/public/project_cm8plie9y1pjh01yea3kubv4c/subgraphs/IAO/0.0.1/gn";
+const IAO_SUBGRAPH_URL = "https://api.goldsky.com/api/public/project_cm8plie9y1pjh01yea3kubv4c/subgraphs/IAO/dev/gn";
 
 export interface IAOTokenEntry {
   id: string; // Token address
