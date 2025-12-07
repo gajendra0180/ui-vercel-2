@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getAPIByAddress, IAOTokenEntry } from "../utils/subgraph";
+import { IAOTokenEntry, getAPIByAddress } from "../utils/api";
 import { useX402Payment } from "../hooks/useX402Payment";
 // @ts-ignore - Vite env variable
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://iaodeployment.vercel.app/";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 import "./APIDetailsPage.css";
 
 export function APIDetailsPage() {
@@ -14,7 +14,9 @@ export function APIDetailsPage() {
   const [api, setApi] = useState<IAOTokenEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
+  const [testingWithoutPayment, setTestingWithoutPayment] = useState(false);
   const [apiResult, setApiResult] = useState<any>(null);
+  const [metadataResult, setMetadataResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [queryParams, setQueryParams] = useState("");
 
@@ -38,6 +40,33 @@ export function APIDetailsPage() {
       setError(err.message || "Failed to load API details");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTestWithoutPayment = async () => {
+    if (!address) {
+      setError("No address provided");
+      return;
+    }
+
+    setTestingWithoutPayment(true);
+    setError(null);
+    setMetadataResult(null);
+
+    try {
+      // Use getAPIByAddress to fetch token metadata (no payment required)
+      const apiData = await getAPIByAddress(address);
+      if (apiData) {
+        setMetadataResult({ token: apiData });
+        setError(null);
+      } else {
+        throw new Error("API not found");
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch API metadata");
+      console.error("API test error:", err);
+    } finally {
+      setTestingWithoutPayment(false);
     }
   };
 
@@ -192,17 +221,27 @@ export function APIDetailsPage() {
                 onChange={(e) => setQueryParams(e.target.value)}
                 placeholder="key=value&key2=value2"
                 className="input"
-                disabled={testing}
+                disabled={testing || testingWithoutPayment}
               />
             </div>
 
-            <button
-              className="btn btn-primary btn-large"
-              onClick={handleTestAPI}
-              disabled={testing || isProcessing || !isReady}
-            >
-              {testing || isProcessing ? "Signing Transaction..." : "💳 Pay & Test API"}
-            </button>
+            <div className="button-group" style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+              <button
+                className="btn btn-secondary btn-large"
+                onClick={handleTestWithoutPayment}
+                disabled={testingWithoutPayment || testing}
+              >
+                {testingWithoutPayment ? "Loading..." : "🔍 Test Metadata (No Payment)"}
+              </button>
+
+              <button
+                className="btn btn-primary btn-large"
+                onClick={handleTestAPI}
+                disabled={testing || isProcessing || !isReady}
+              >
+                {testing || isProcessing ? "Signing Transaction..." : "💳 Pay & Test API"}
+              </button>
+            </div>
 
             {!isReady && (
               <p className="warning-text">⚠️ Please connect your wallet to test APIs. You'll be prompted to sign the payment transaction.</p>
@@ -215,9 +254,18 @@ export function APIDetailsPage() {
             </div>
           )}
 
+          {metadataResult && (
+            <div className="result-box">
+              <h4>📋 Token Metadata (No Payment)</h4>
+              <div className="result-data">
+                <pre>{JSON.stringify(metadataResult, null, 2)}</pre>
+              </div>
+            </div>
+          )}
+
           {apiResult && (
             <div className="result-box">
-              <h4>✅ API Response</h4>
+              <h4>✅ Paid API Response</h4>
               <div className="result-info">
                 <p><strong>Payment Status:</strong> {apiResult.payment?.status || "paid"}</p>
                 <p><strong>Subscription Fee:</strong> {apiResult.payment?.subscriptionFee || api.subscriptionFee}</p>

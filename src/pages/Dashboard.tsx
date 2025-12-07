@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useActiveAccount } from "thirdweb/react";
-import { getAllAPIs, IAOTokenEntry } from "../utils/subgraph";
+import { getAllAPIs, IAOTokenEntry } from "../utils/api";
 import "./Dashboard.css";
 
 export function Dashboard() {

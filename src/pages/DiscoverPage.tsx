@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAllAPIs, IAOTokenEntry } from "../utils/subgraph";
+import { getAllAPIs, IAOTokenEntry } from "../utils/api";
 import { APICard } from "../components/APICard";
+import { EXAMPLE_TOKEN_ADDRESS } from "../constants/addresses";
 import "./DiscoverPage.css";
 
 type SortOption = "trending" | "newest" | "price-low" | "price-high";
@@ -38,11 +39,6 @@ const formatUSDC = (fee: string) => {
   }
 };
 
-const getPriceTier = (price: number): Exclude<PriceTier, "all"> => {
-  if (price < PRICE_TIER_META.starter.max) return "starter";
-  if (price < PRICE_TIER_META.growth.max) return "growth";
-  return "pro";
-};
 
 const formatCompactNumber = (value: number) =>
   new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value);
@@ -211,7 +207,7 @@ export function DiscoverPage() {
             </button>
             <button
               className="btn btn-secondary hero-btn"
-              onClick={() => navigate("/api/0x4966baf06bfc7a9b566662bb52cfa718a2f60ee9")}
+              onClick={() => navigate(`/api/${EXAMPLE_TOKEN_ADDRESS}`)}
             >
               Explore sample API
             </button>

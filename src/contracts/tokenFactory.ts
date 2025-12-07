@@ -2,7 +2,8 @@
 // Contract: 0x5a5225c2048707734d445d87532a5d442c8A6eA1
 // Implementation: 0x52e4d83d25dea4a77350a12407eb72ac82a3ea83
 
-export const TOKEN_FACTORY_ADDRESS = "0x5a5225c2048707734d445d87532a5d442c8A6eA1";
+import { TOKEN_FACTORY_ADDRESS } from "../constants/addresses";
+export { TOKEN_FACTORY_ADDRESS };
 
 // Complete verified ABI from BaseScan
 export const TOKEN_FACTORY_ABI = [
@@ -186,11 +187,6 @@ export const TOKEN_FACTORY_ABI = [
           {
             internalType: "uint256",
             name: "subscriptionFee",
-            type: "uint256",
-          },
-          {
-            internalType: "uint256",
-            name: "subscriptionTokenAmount",
             type: "uint256",
           },
         ],

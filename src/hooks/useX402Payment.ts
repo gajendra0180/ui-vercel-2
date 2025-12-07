@@ -2,9 +2,7 @@
 import { useState } from "react";
 import { useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { base } from "thirdweb/chains";
-
-// USDC on Base mainnet
-const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+import { USDC_ADDRESS } from "../constants/addresses";
 
 export function useX402Payment() {
   const account = useActiveAccount();

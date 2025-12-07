@@ -6,8 +6,7 @@ import { base } from "thirdweb/chains";
 import { facilitator } from "@coinbase/x402";
 import { thirdwebClient } from "../lib/thirdwebClient";
 
-// USDC on Base mainnet
-const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+import { USDC_ADDRESS } from "../constants/addresses";
 
 // EIP-3009 TransferWithAuthorization ABI
 const USDC_ABI = [

@@ -1,4 +1,4 @@
-import { IAOTokenEntry } from "../utils/subgraph";
+import { IAOTokenEntry } from "../utils/api";
 import "./APICard.css";
 
 interface APICardProps {
