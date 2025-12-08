@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { getContract, prepareContractCall, sendTransaction, waitForReceipt } from "thirdweb";
-import { base } from "thirdweb/chains";
+import { baseSepolia } from "thirdweb/chains";
 import { facilitator } from "@coinbase/x402";
 import { thirdwebClient } from "../lib/thirdwebClient";
 
@@ -55,7 +55,7 @@ export function useWalletPayment() {
       // Get USDC contract
       const usdcContract = getContract({
         client: thirdwebClient,
-        chain: base,
+        chain: baseSepolia,
         address: USDC_ADDRESS,
         abi: USDC_ABI,
       });

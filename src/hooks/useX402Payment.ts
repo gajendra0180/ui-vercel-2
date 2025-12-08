@@ -1,7 +1,7 @@
 // x402 payment hook using user's connected wallet to sign payment proofs
 import { useState } from "react";
 import { useActiveAccount, useActiveWallet } from "thirdweb/react";
-import { base } from "thirdweb/chains";
+import { baseSepolia } from "thirdweb/chains";
 import { USDC_ADDRESS } from "../constants/addresses";
 
 export function useX402Payment() {
@@ -52,7 +52,9 @@ export function useX402Payment() {
         const x402Version = paymentInfo?.x402Version ?? 1;
 
         // Step 3: Generate EIP-3009 authorization parameters
-        const validAfter = Math.floor(Date.now() / 1000);
+        // Set validAfter to current time minus 60 seconds to account for clock skew and block time
+        // The contract requires validAfter <= block.timestamp, so we set it slightly in the past
+        const validAfter = Math.floor(Date.now() / 1000) - 60; // 60 seconds in the past to account for clock skew
         const validBefore = validAfter + 3600; // 1 hour validity
         // Generate random nonce (bytes32)
         const nonceArray = new Uint8Array(32);
@@ -60,10 +62,11 @@ export function useX402Payment() {
         const nonceBytes32 = `0x${Array.from(nonceArray).map(b => b.toString(16).padStart(2, '0')).join('')}` as `0x${string}`;
 
         // Step 4: User signs the EIP-3009 authorization (facilitator will use this)
+        // Note: USDC on Base Sepolia uses "USDC" as the EIP-712 domain name, not "USD Coin"
         const domain = {
-          name: "USD Coin",
+          name: "USDC",
           version: "2",
-          chainId: base.id,
+          chainId: baseSepolia.id,
           verifyingContract: paymentAsset,
         };
 
@@ -154,6 +157,25 @@ export function useX402Payment() {
             },
           },
         };
+        
+        console.log("Payment proof details:", {
+          network,
+          chainId: baseSepolia.id,
+          payTo,
+          paymentAsset,
+          from: account.address,
+          domain: {
+            name: "USDC",
+            version: "2",
+            chainId: baseSepolia.id,
+            verifyingContract: paymentAsset,
+          },
+          paymentProof: {
+            network,
+            chainId: baseSepolia.id,
+            mismatch: network === "base" && baseSepolia.id === 84532 ? "⚠️ Network string 'base' but chainId is 84532 (Base Sepolia)" : "OK",
+          },
+        });
 
         // Step 6: Wait a moment for facilitator to process payment, then retry with X-PAYMENT header
         // The facilitator uses the authorization we just signed to process the payment on-chain

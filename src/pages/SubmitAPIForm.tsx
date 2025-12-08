@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useActiveAccount, useActiveWalletChain, useSendTransaction } from "thirdweb/react";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
-import { base } from "thirdweb/chains";
+import { baseSepolia } from "thirdweb/chains";
 import { parseUnits, parseEventLogs, createPublicClient, http } from "viem";
-import { base as baseViem } from "viem/chains";
+import { baseSepolia as baseSepoliaViem } from "viem/chains";
 import { TOKEN_FACTORY_ADDRESS, TOKEN_FACTORY_ABI } from "../contracts/tokenFactory";
 import { USDC_ADDRESS } from "../constants/addresses";
 import { thirdwebClient } from "../lib/thirdwebClient";
@@ -79,8 +79,8 @@ export function SubmitAPIForm() {
       return;
     }
 
-    if (!chain || chain.id !== base.id) {
-      setError("Please switch your wallet to Base mainnet before submitting.");
+    if (!chain || chain.id !== baseSepolia.id) {
+      setError("Please switch your wallet to Base Sepolia testnet before submitting.");
       return;
     }
 
@@ -114,7 +114,7 @@ export function SubmitAPIForm() {
 
       const tokenFactoryContract = getContract({
         client: thirdwebClient,
-        chain: base,
+        chain: baseSepolia,
         address: TOKEN_FACTORY_ADDRESS,
         abi: TOKEN_FACTORY_ABI,
       });
@@ -182,7 +182,7 @@ export function SubmitAPIForm() {
           try {
             // Wait for transaction receipt to get the token address from the event
             const publicClient = createPublicClient({
-              chain: baseViem,
+              chain: baseSepoliaViem,
               transport: http(),
             });
 
