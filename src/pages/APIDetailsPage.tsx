@@ -123,10 +123,6 @@ export function APIDetailsPage() {
     return `$${usdcAmount.toFixed(2)}`;
   };
 
-  const formatTokenAmount = (amount: string) => {
-    const amountNum = BigInt(amount);
-    return (Number(amountNum) / 1e18).toLocaleString();
-  };
 
   if (loading) {
     return (
@@ -168,10 +164,6 @@ export function APIDetailsPage() {
           <div className="price-badge">
             <span className="price-label">Price</span>
             <span className="price-value">{formatFee(api.subscriptionFee)}</span>
-          </div>
-          <div className="tokens-badge">
-            <span className="tokens-label">Tokens Earned</span>
-            <span className="tokens-value">🪙 {formatTokenAmount(api.subscriptionTokenAmount)}</span>
           </div>
         </div>
       </div>

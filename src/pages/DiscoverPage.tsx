@@ -317,12 +317,6 @@ export function DiscoverPage() {
                   <strong>{formatCurrencyDisplay(formatUSDC(featuredApi.subscriptionFee))}</strong>
                 </div>
                 <div>
-                  <span>Tokens earned</span>
-                  <strong>
-                    {formatTokenReward(featuredApi.subscriptionTokenAmount)} {featuredApi.symbol}
-                  </strong>
-                </div>
-                <div>
                   <span>Usage</span>
                   <strong>{featuredApi.subscriptionCount || "0"}</strong>
                 </div>
