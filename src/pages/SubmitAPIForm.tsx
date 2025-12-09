@@ -24,8 +24,6 @@ export function SubmitAPIForm() {
     symbol: "",
     apiUrl: "",
     subscriptionFee: "",
-    subscriptionTokenAmount: "",
-    maxSubscriptionCount: "1000000", // Default value
     description: "",
   });
 
@@ -235,7 +233,6 @@ export function SubmitAPIForm() {
             // Register the token with the backend API
             try {
               const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-              const maxSubscriptionCount = formData.maxSubscriptionCount || "1000000";
               
               const registerResponse = await fetch(`${baseUrl}/api/register`, {
                 method: "POST",
@@ -250,10 +247,6 @@ export function SubmitAPIForm() {
                   builder: account.address,
                   paymentToken: USDC_ADDRESS,
                   subscriptionFee: subscriptionFeeWei.toString(),
-                  // subscriptionTokenAmount will be fetched from the contract or calculated
-                  // For now, we'll set it to 0 and let the backend fetch it from the contract if needed
-                  subscriptionTokenAmount: "0",
-                  maxSubscriptionCount: maxSubscriptionCount,
                 }),
               });
 
@@ -411,38 +404,7 @@ export function SubmitAPIForm() {
             <small>Amount users pay per API call (in USDC)</small>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="subscriptionTokenAmount">Tokens Per Subscription *</label>
-            <input
-              id="subscriptionTokenAmount"
-              name="subscriptionTokenAmount"
-              type="number"
-              step="1"
-              min="1"
-              value={formData.subscriptionTokenAmount}
-              onChange={handleInputChange}
-              placeholder="1000"
-              required
-              className="input"
-            />
-            <small>Number of API tokens users earn per subscription</small>
-          </div>
 
-          <div className="form-group">
-            <label htmlFor="maxSubscriptionCount">Max Subscription Count (optional)</label>
-            <input
-              id="maxSubscriptionCount"
-              name="maxSubscriptionCount"
-              type="number"
-              step="1"
-              min="1"
-              value={formData.maxSubscriptionCount}
-              onChange={handleInputChange}
-              placeholder="1000000"
-              className="input"
-            />
-            <small>Maximum number of subscriptions allowed for this API (default: 1,000,000)</small>
-          </div>
         </div>
 
         {error && (

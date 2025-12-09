@@ -10,7 +10,6 @@ export interface IAOTokenEntry {
   name: string;
   symbol: string;
   subscriptionFee: string;
-  subscriptionTokenAmount: string;
   paymentToken: string;
   subscriptionCount?: string; // Usage count
 }
@@ -98,8 +97,6 @@ export async function registerToken(tokenData: {
   builder: string;
   paymentToken: string;
   subscriptionFee: string;
-  subscriptionTokenAmount: string;
-  maxSubscriptionCount?: string;
 }): Promise<{ success: boolean; token?: any; error?: string }> {
   try {
     const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;

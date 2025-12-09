@@ -65,10 +65,6 @@ export function APICard({ api, onViewDetails, onTryAPI, variant = "grid" }: APIC
             <span className="stat-value">{fee.label}</span>
           </div>
           <div className="stat">
-            <span className="stat-label">Tokens</span>
-            <span className="stat-value">🪙 {formatTokenAmount(api.subscriptionTokenAmount)}</span>
-          </div>
-          <div className="stat">
             <span className="stat-label">Usage</span>
             <span className="stat-value">{usageCount}</span>
           </div>
