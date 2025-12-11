@@ -11,7 +11,7 @@ import { thirdwebClient } from "../lib/thirdwebClient";
 import "./SubmitAPIForm.css";
 
 // @ts-ignore - Vite env variable
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://iaodeployment-git-basetestnet-gajendra-0180s-projects.vercel.app";
 
 export function SubmitAPIForm() {
   const navigate = useNavigate();

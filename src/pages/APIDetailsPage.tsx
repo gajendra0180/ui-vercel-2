@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { IAOTokenEntry, getAPIByAddress } from "../utils/api";
 import { useX402Payment } from "../hooks/useX402Payment";
 // @ts-ignore - Vite env variable
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://iaodeployment-git-basetestnet-gajendra-0180s-projects.vercel.app";
 import "./APIDetailsPage.css";
 
 export function APIDetailsPage() {
