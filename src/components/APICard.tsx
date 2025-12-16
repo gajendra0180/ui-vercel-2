@@ -1,10 +1,10 @@
-import { IAOTokenEntry } from "../utils/api";
+import { ServerEntry } from "../utils/api";
 import "./APICard.css";
 
 interface APICardProps {
-  api: IAOTokenEntry;
-  onViewDetails: (tokenAddress: string) => void;
-  onTryAPI: (tokenAddress: string) => void;
+  server: ServerEntry;
+  onViewDetails: () => void;
+  onTryServer: () => void;
   variant?: "grid" | "list";
 }
 
@@ -27,13 +27,13 @@ const tierLabels = (price: number) => {
   return { label: "Pro", className: "pro" };
 };
 
-export function APICard({ api, onViewDetails, onTryAPI, variant = "grid" }: APICardProps) {
-  const fee = formatFee(api.subscriptionFee);
-  const usageCount = api.subscriptionCount ? parseInt(api.subscriptionCount) : 0;
+export function APICard({ server, onViewDetails, onTryServer, variant = "grid" }: APICardProps) {
+  const fee = formatFee(server.subscriptionFee);
+  const usageCount = server.subscriptionCount ? parseInt(server.subscriptionCount) : 0;
   const isTrending = usageCount > 10;
   const tier = tierLabels(fee.value);
-  const builderShort = `${api.builder.slice(0, 6)}...${api.builder.slice(-4)}`;
-  const apiCount = api.apiCount || api.apis?.length || 1;
+  const builderShort = `${server.builder.slice(0, 6)}...${server.builder.slice(-4)}`;
+  const apiCount = server.apiCount || server.apis?.length || 0;
 
   return (
     <div className={`api-card ${isTrending ? "trending" : ""} ${variant}`}>
@@ -44,9 +44,10 @@ export function APICard({ api, onViewDetails, onTryAPI, variant = "grid" }: APIC
             <span className={`tier-pill ${tier.className}`}>{tier.label}</span>
             <span className="builder-pill">by {builderShort}</span>
           </div>
-          <h3>{api.name}</h3>
+          <h3>{server.name}</h3>
+          <span className="server-slug">/{server.slug}</span>
         </div>
-        <span className="api-symbol">{api.symbol}</span>
+        <span className="api-symbol">{server.symbol}</span>
       </div>
       <div className="api-card-body">
         <div className="api-stats">
@@ -63,19 +64,25 @@ export function APICard({ api, onViewDetails, onTryAPI, variant = "grid" }: APIC
             <span className="stat-value">{apiCount}</span>
           </div>
         </div>
-        <div className="api-address">
-          <small>{api.id.slice(0, 6)}...{api.id.slice(-4)}</small>
-        </div>
+        {server.apis && server.apis.length > 0 && (
+          <div className="api-endpoints-preview">
+            {server.apis.slice(0, 2).map(api => (
+              <code key={api.slug} className="endpoint-slug">/{server.slug}/{api.slug}</code>
+            ))}
+            {server.apis.length > 2 && (
+              <span className="more-endpoints">+{server.apis.length - 2} more</span>
+            )}
+          </div>
+        )}
       </div>
       <div className="api-card-actions">
-        <button className="btn btn-secondary" onClick={() => onViewDetails(api.id)}>
+        <button className="btn btn-secondary" onClick={onViewDetails}>
           View Details
         </button>
-        <button className="btn btn-primary" onClick={() => onTryAPI(api.id)}>
+        <button className="btn btn-primary" onClick={onTryServer}>
           Try API
         </button>
       </div>
     </div>
   );
 }
-

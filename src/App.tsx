@@ -46,7 +46,7 @@ function AppContent() {
       <main className="main-content">
         <Routes>
           <Route path="/" element={<DiscoverPage />} />
-          <Route path="/api/:address" element={<APIDetailsPage />} />
+          <Route path="/server/:serverSlug" element={<APIDetailsPage />} />
           <Route path="/submit" element={<SubmitAPIForm />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>

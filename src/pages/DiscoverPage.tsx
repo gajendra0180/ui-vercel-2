@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAllAPIs, IAOTokenEntry } from "../utils/api";
+import { getAllServers, ServerEntry } from "../utils/api";
 import { APICard } from "../components/APICard";
-import { EXAMPLE_TOKEN_ADDRESS } from "../constants/addresses";
 import "./DiscoverPage.css";
 
 type SortOption = "trending" | "newest" | "price-low" | "price-high";
@@ -39,28 +38,16 @@ const formatUSDC = (fee: string) => {
   }
 };
 
-
 const formatCompactNumber = (value: number) =>
   new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 
 const formatCurrencyDisplay = (value: number) =>
   `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const formatTokenReward = (amount: string) => {
-  try {
-    const tokens = Number(BigInt(amount)) / 1e18;
-    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-    if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;
-    return tokens.toFixed(0);
-  } catch {
-    return "0";
-  }
-};
-
 export function DiscoverPage() {
   const navigate = useNavigate();
-  const [apis, setApis] = useState<IAOTokenEntry[]>([]);
-  const [filteredApis, setFilteredApis] = useState<IAOTokenEntry[]>([]);
+  const [servers, setServers] = useState<ServerEntry[]>([]);
+  const [filteredServers, setFilteredServers] = useState<ServerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("trending");
@@ -68,27 +55,27 @@ export function DiscoverPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
   useEffect(() => {
-    loadAPIs();
+    loadServers();
   }, []);
 
   useEffect(() => {
-    filterAndSortAPIs();
-  }, [apis, searchQuery, sortBy, priceFilter]);
+    filterAndSortServers();
+  }, [servers, searchQuery, sortBy, priceFilter]);
 
   const heroStats = useMemo(() => {
-    if (!apis.length) {
+    if (!servers.length) {
       return {
-        totalApis: 0,
+        totalServers: 0,
         totalSubscriptions: 0,
         totalVolume: 0,
         avgPrice: 0,
       };
     }
 
-    const totals = apis.reduce(
-      (acc, api) => {
-        const subscriptions = Number(api.subscriptionCount || "0");
-        const price = formatUSDC(api.subscriptionFee);
+    const totals = servers.reduce(
+      (acc, server) => {
+        const subscriptions = Number(server.subscriptionCount || "0");
+        const price = formatUSDC(server.subscriptionFee);
         acc.totalSubscriptions += subscriptions;
         acc.totalVolume += subscriptions * price;
         acc.totalPrice += price;
@@ -98,46 +85,47 @@ export function DiscoverPage() {
     );
 
     return {
-      totalApis: apis.length,
+      totalServers: servers.length,
       totalSubscriptions: totals.totalSubscriptions,
       totalVolume: totals.totalVolume,
-      avgPrice: totals.totalPrice / apis.length,
+      avgPrice: totals.totalPrice / servers.length,
     };
-  }, [apis]);
+  }, [servers]);
 
-  const featuredApi = filteredApis[0] || null;
-  const remainingApis = featuredApi ? filteredApis.slice(1) : filteredApis;
+  const featuredServer = filteredServers[0] || null;
+  const remainingServers = featuredServer ? filteredServers.slice(1) : filteredServers;
 
-  const loadAPIs = async () => {
+  const loadServers = async () => {
     try {
       setLoading(true);
-      const allAPIs = await getAllAPIs();
-      setApis(allAPIs);
+      const allServers = await getAllServers();
+      setServers(allServers);
     } catch (error) {
-      console.error("Failed to load APIs:", error);
+      console.error("Failed to load servers:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterAndSortAPIs = () => {
-    let filtered = [...apis];
+  const filterAndSortServers = () => {
+    let filtered = [...servers];
 
-    // Filter by search query
+    // Filter by search query (include slug in search)
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
-        (api) =>
-          api.name.toLowerCase().includes(query) ||
-          api.symbol.toLowerCase().includes(query) ||
-          api.id.toLowerCase().includes(query)
+        (server) =>
+          server.name.toLowerCase().includes(query) ||
+          server.symbol.toLowerCase().includes(query) ||
+          server.slug?.toLowerCase().includes(query) ||
+          server.id.toLowerCase().includes(query)
       );
     }
 
     if (priceFilter !== "all") {
       const tier = PRICE_TIER_META[priceFilter];
-      filtered = filtered.filter((api) => {
-        const price = formatUSDC(api.subscriptionFee);
+      filtered = filtered.filter((server) => {
+        const price = formatUSDC(server.subscriptionFee);
         return price >= tier.min && price <= tier.max;
       });
     }
@@ -150,7 +138,10 @@ export function DiscoverPage() {
           const bCount = parseInt(b.subscriptionCount || "0");
           return bCount - aCount;
         case "newest":
-          // Assuming newer APIs have higher addresses or we track creation time
+          // Sort by createdAt if available, otherwise by ID
+          if (a.createdAt && b.createdAt) {
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          }
           return b.id.localeCompare(a.id);
         case "price-low":
           return formatUSDC(a.subscriptionFee) - formatUSDC(b.subscriptionFee);
@@ -161,15 +152,15 @@ export function DiscoverPage() {
       }
     });
 
-    setFilteredApis(filtered);
+    setFilteredServers(filtered);
   };
 
-  const handleViewDetails = (tokenAddress: string) => {
-    navigate(`/api/${tokenAddress}`);
+  const handleViewDetails = (serverSlug: string) => {
+    navigate(`/server/${serverSlug}`);
   };
 
-  const handleTryAPI = (tokenAddress: string) => {
-    navigate(`/api/${tokenAddress}?try=true`);
+  const handleTryServer = (serverSlug: string) => {
+    navigate(`/server/${serverSlug}?try=true`);
   };
 
   if (loading) {
@@ -205,12 +196,14 @@ export function DiscoverPage() {
             <button className="btn btn-primary hero-btn" onClick={() => navigate("/submit")}>
               🖥️ Register Server
             </button>
-            <button
-              className="btn btn-secondary hero-btn"
-              onClick={() => navigate(`/api/${EXAMPLE_TOKEN_ADDRESS}`)}
-            >
-              Try Demo
-            </button>
+            {featuredServer && (
+              <button
+                className="btn btn-secondary hero-btn"
+                onClick={() => navigate(`/server/${featuredServer.slug}`)}
+              >
+                Try Demo
+              </button>
+            )}
           </div>
         </div>
         <div className="hero-panel">
@@ -230,7 +223,7 @@ export function DiscoverPage() {
       <section className="stats-section">
         <div className="stat-card">
           <p className="stat-label">Servers</p>
-          <h3>{heroStats.totalApis}</h3>
+          <h3>{heroStats.totalServers}</h3>
           <span className="stat-hint">Active servers</span>
         </div>
         <div className="stat-card">
@@ -254,7 +247,7 @@ export function DiscoverPage() {
         <div className="search-box">
           <input
             type="text"
-            placeholder="🔍 Search APIs by name, symbol, or address..."
+            placeholder="🔍 Search by name, symbol, or slug..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="search-input"
@@ -304,53 +297,64 @@ export function DiscoverPage() {
         ))}
       </div>
 
-      {featuredApi && (
+      {featuredServer && (
         <section className="featured-section">
           <div className="featured-card">
             <div className="featured-content">
               <p className="eyebrow">🔥 Featured Server</p>
-              <h2>{featuredApi.name}</h2>
-              <p className="featured-symbol">{featuredApi.symbol}</p>
+              <h2>{featuredServer.name}</h2>
+              <p className="featured-symbol">
+                <span className="slug-badge">/{featuredServer.slug}</span>
+                <span>{featuredServer.symbol}</span>
+              </p>
               <div className="featured-stats">
                 <div>
                   <span>Price</span>
-                  <strong>{formatCurrencyDisplay(formatUSDC(featuredApi.subscriptionFee))}</strong>
+                  <strong>{formatCurrencyDisplay(formatUSDC(featuredServer.subscriptionFee))}</strong>
                 </div>
                 <div>
                   <span>Calls</span>
-                  <strong>{featuredApi.subscriptionCount || "0"}</strong>
+                  <strong>{featuredServer.subscriptionCount || "0"}</strong>
                 </div>
                 <div>
                   <span>APIs</span>
-                  <strong>{featuredApi.apiCount || featuredApi.apis?.length || 1}</strong>
+                  <strong>{featuredServer.apiCount || featuredServer.apis?.length || 0}</strong>
                 </div>
               </div>
               <div className="featured-actions">
-                <button className="btn btn-primary" onClick={() => handleTryAPI(featuredApi.id)}>
+                <button className="btn btn-primary" onClick={() => handleTryServer(featuredServer.slug)}>
                   ⚡ Try Now
                 </button>
-                <button className="btn ghost" onClick={() => handleViewDetails(featuredApi.id)}>
+                <button className="btn ghost" onClick={() => handleViewDetails(featuredServer.slug)}>
                   View Details
                 </button>
               </div>
             </div>
             <div className="featured-meta">
-              <p><strong>Owner:</strong> {featuredApi.builder.slice(0, 6)}...{featuredApi.builder.slice(-4)}</p>
-              <p><strong>Address:</strong> {featuredApi.id.slice(0, 6)}...{featuredApi.id.slice(-4)}</p>
-              {featuredApi.apis && featuredApi.apis.length > 0 && (
-                <p><strong>Endpoints:</strong> {featuredApi.apis.map(a => a.name).join(", ")}</p>
+              <p><strong>Owner:</strong> {featuredServer.builder.slice(0, 6)}...{featuredServer.builder.slice(-4)}</p>
+              {featuredServer.apis && featuredServer.apis.length > 0 && (
+                <div className="featured-apis">
+                  <strong>Endpoints:</strong>
+                  <ul>
+                    {featuredServer.apis.map(api => (
+                      <li key={api.slug}>
+                        <code>/{featuredServer.slug}/{api.slug}</code> — {api.name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
           </div>
         </section>
       )}
 
-      {filteredApis.length === 0 ? (
+      {filteredServers.length === 0 ? (
         <div className="empty-state">
           <p>
             {searchQuery || priceFilter !== "all"
-              ? "No APIs match your current search & filters."
-              : "No APIs available yet. Be the first to submit!"}
+              ? "No servers match your current search & filters."
+              : "No servers available yet. Be the first to register!"}
           </p>
           <div className="empty-actions">
             <button className="btn btn-primary" onClick={() => navigate("/submit")}>
@@ -369,15 +373,15 @@ export function DiscoverPage() {
             )}
           </div>
         </div>
-      ) : remainingApis.length === 0 ? null : (
+      ) : remainingServers.length === 0 ? null : (
         <section className={`api-section ${viewMode === "list" ? "list-mode" : ""}`}>
           <div className={viewMode === "list" ? "api-list" : "api-grid"}>
-            {remainingApis.map((api) => (
+            {remainingServers.map((server) => (
               <APICard
-                key={api.id}
-                api={api}
-                onViewDetails={handleViewDetails}
-                onTryAPI={handleTryAPI}
+                key={server.id}
+                server={server}
+                onViewDetails={() => handleViewDetails(server.slug)}
+                onTryServer={() => handleTryServer(server.slug)}
                 variant={viewMode}
               />
             ))}
@@ -387,4 +391,3 @@ export function DiscoverPage() {
     </div>
   );
 }
-

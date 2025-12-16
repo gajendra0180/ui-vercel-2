@@ -8,11 +8,27 @@ import { baseSepolia as baseSepoliaViem } from "viem/chains";
 import { TOKEN_FACTORY_ADDRESS, TOKEN_FACTORY_ABI } from "../contracts/tokenFactory";
 import { USDC_ADDRESS } from "../constants/addresses";
 import { thirdwebClient } from "../lib/thirdwebClient";
-import { getAllAPIs, IAOTokenEntry } from "../utils/api";
+import { getAllServers, ServerEntry, checkServerSlugExists } from "../utils/api";
 import "./SubmitAPIForm.css";
 
 // @ts-ignore - Vite env variable
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+// Validate slug format: lowercase alphanumeric with hyphens, 3-30 chars
+function isValidSlug(slug: string): boolean {
+  return /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(slug);
+}
+
+// Generate slug suggestion from name
+function generateSlugFromName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 30);
+}
 
 export function SubmitAPIForm() {
   const navigate = useNavigate();
@@ -20,13 +36,13 @@ export function SubmitAPIForm() {
   const chain = useActiveWalletChain();
   const { mutate: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
   
-  // Check if builder already has a token
-  const [existingToken, setExistingToken] = useState<IAOTokenEntry | null>(null);
+  // Check if builder already has a server
+  const [existingServer, setExistingServer] = useState<ServerEntry | null>(null);
   const [checkingExisting, setCheckingExisting] = useState(true);
   
-  // Check if builder already has a registered token
+  // Check if builder already has a registered server
   useEffect(() => {
-    const checkExistingToken = async () => {
+    const checkExistingServer = async () => {
       if (!account) {
         setCheckingExisting(false);
         return;
@@ -34,58 +50,93 @@ export function SubmitAPIForm() {
       
       try {
         setCheckingExisting(true);
-        const allAPIs = await getAllAPIs();
-        const builderToken = allAPIs.find(
-          (api) => api.builder.toLowerCase() === account.address.toLowerCase()
+        const allServers = await getAllServers();
+        const builderServer = allServers.find(
+          (server) => server.builder.toLowerCase() === account.address.toLowerCase()
         );
-        setExistingToken(builderToken || null);
+        setExistingServer(builderServer || null);
       } catch (error) {
-        console.error("Error checking existing token:", error);
+        console.error("Error checking existing server:", error);
       } finally {
         setCheckingExisting(false);
       }
     };
     
-    checkExistingToken();
+    checkExistingServer();
   }, [account]);
 
   // API entry for the form
   interface FormApiEntry {
+    slug: string;
     name: string;
     apiUrl: string;
     description: string;
+    slugManuallyEdited?: boolean; // Track if user manually edited the slug
   }
 
   const [formData, setFormData] = useState({
     name: "",
+    slug: "",
     symbol: "",
     subscriptionFee: "",
   });
 
   // Support multiple APIs
   const [apis, setApis] = useState<FormApiEntry[]>([
-    { name: "", apiUrl: "", description: "" }
+    { slug: "", name: "", apiUrl: "", description: "", slugManuallyEdited: false }
   ]);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [slugError, setSlugError] = useState<string | null>(null);
+  const [serverSlugManuallyEdited, setServerSlugManuallyEdited] = useState(false);
+
+  // Auto-generate server slug from name (only if not manually edited)
+  useEffect(() => {
+    if (formData.name && !serverSlugManuallyEdited) {
+      setFormData(prev => ({ ...prev, slug: generateSlugFromName(formData.name) }));
+    }
+  }, [formData.name, serverSlugManuallyEdited]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    // Handle slug field specially - lowercase and validate
+    if (name === "slug") {
+      const slugValue = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      setFormData((prev) => ({ ...prev, [name]: slugValue }));
+      setServerSlugManuallyEdited(true); // User manually edited, stop auto-generating
+      setSlugError(null);
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
     setError(null);
   };
 
   const handleApiChange = (index: number, field: keyof FormApiEntry, value: string) => {
     const newApis = [...apis];
-    newApis[index] = { ...newApis[index], [field]: value };
+    
+    // Handle slug field specially - lowercase and validate
+    if (field === "slug") {
+      const slugValue = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      newApis[index] = { ...newApis[index], slug: slugValue, slugManuallyEdited: true };
+    } else if (field === "name") {
+      newApis[index] = { ...newApis[index], name: value };
+      // Auto-generate slug from name if user hasn't manually edited the slug
+      if (!newApis[index].slugManuallyEdited) {
+        newApis[index].slug = generateSlugFromName(value);
+      }
+    } else {
+      newApis[index] = { ...newApis[index], [field]: value };
+    }
+    
     setApis(newApis);
     setError(null);
   };
 
   const addApi = () => {
-    setApis([...apis, { name: "", apiUrl: "", description: "" }]);
+    setApis([...apis, { slug: "", name: "", apiUrl: "", description: "", slugManuallyEdited: false }]);
   };
 
   const removeApi = (index: number) => {
@@ -94,13 +145,29 @@ export function SubmitAPIForm() {
     }
   };
 
-  const validateForm = (): boolean => {
+  const validateForm = async (): Promise<boolean> => {
     if (!formData.name.trim()) {
-      setError("Token name is required");
+      setError("Server name is required");
       return false;
     }
+    if (!formData.slug.trim()) {
+      setError("Server slug is required");
+      return false;
+    }
+    if (!isValidSlug(formData.slug)) {
+      setError("Server slug must be 3-30 characters, lowercase alphanumeric with hyphens, starting and ending with alphanumeric");
+      return false;
+    }
+    
+    // Check if server slug already exists
+    const slugExists = await checkServerSlugExists(formData.slug);
+    if (slugExists) {
+      setError(`Server slug "${formData.slug}" is already taken. Please choose a different slug.`);
+      return false;
+    }
+    
     if (!formData.symbol.trim()) {
-      setError("Token symbol is required");
+      setError("Server symbol is required");
       return false;
     }
     if (!formData.subscriptionFee || parseFloat(formData.subscriptionFee) <= 0) {
@@ -109,8 +176,23 @@ export function SubmitAPIForm() {
     }
     
     // Validate all APIs
+    const apiSlugs = new Set<string>();
     for (let i = 0; i < apis.length; i++) {
       const api = apis[i];
+      if (!api.slug.trim()) {
+        setError(`API #${i + 1}: Slug is required`);
+        return false;
+      }
+      if (!isValidSlug(api.slug)) {
+        setError(`API #${i + 1}: Slug must be 3-30 characters, lowercase alphanumeric with hyphens`);
+        return false;
+      }
+      if (apiSlugs.has(api.slug)) {
+        setError(`API #${i + 1}: Duplicate slug "${api.slug}". Each API must have a unique slug.`);
+        return false;
+      }
+      apiSlugs.add(api.slug);
+      
       if (!api.name.trim()) {
         setError(`API #${i + 1}: Name is required`);
         return false;
@@ -142,7 +224,8 @@ export function SubmitAPIForm() {
       return;
     }
 
-    if (!validateForm()) {
+    const isValid = await validateForm();
+    if (!isValid) {
       return;
     }
 
@@ -164,24 +247,18 @@ export function SubmitAPIForm() {
         return;
       }
 
-      // Note: subscriptionTokenAmount is calculated by the contract internally
-      // based on: subscriptionFee * paymentTokenInfo[paymentToken].price / 10^decimals
-      // We don't need to send it in the transaction
-
-      // Log parameters for debugging
       // Note: Contract only supports single apiURL, we use the first API's URL
-      // Additional APIs are registered via backend after token creation
       const primaryApiUrl = apis[0].apiUrl;
       
       console.log("📝 Preparing transaction with params:", {
         name: formData.name,
+        slug: formData.slug,
         symbol: formData.symbol,
         apiURL: primaryApiUrl,
         builder: account.address,
         paymentToken: USDC_ADDRESS,
         subscriptionFee: subscriptionFeeWei.toString(),
         totalApis: apis.length,
-        // subscriptionTokenAmount is calculated by contract internally
       });
 
       const tokenFactoryContract = getContract({
@@ -222,12 +299,9 @@ export function SubmitAPIForm() {
         }
       } catch (checkError: any) {
         console.warn("⚠️ Could not check contract state:", checkError);
-        // Continue anyway, the transaction will fail if there's an issue
       }
 
-      // Prepare contract call with tuple parameter
-      // The contract only takes 6 parameters - subscriptionTokenAmount is calculated internally
-      // Note: Contract only supports single apiURL, we use the first API's URL
+      // Prepare contract call
       const transaction = prepareContractCall({
         contract: tokenFactoryContract,
         method: "createToken",
@@ -235,12 +309,10 @@ export function SubmitAPIForm() {
           {
             name: formData.name.trim(),
             symbol: formData.symbol.trim(),
-            apiURL: primaryApiUrl.trim(), // Use first API's URL for contract
-            builder: account.address, // Builder is the user submitting the API
+            apiURL: primaryApiUrl.trim(),
+            builder: account.address,
             paymentToken: USDC_ADDRESS,
             subscriptionFee: subscriptionFeeWei,
-            // Note: subscriptionTokenAmount is calculated by the contract internally
-            // based on: subscriptionFee * paymentTokenInfo[paymentToken].price / 10^decimals
           },
         ],
       });
@@ -262,21 +334,19 @@ export function SubmitAPIForm() {
             // Poll for transaction receipt
             let receipt = null;
             let attempts = 0;
-            const maxAttempts = 30; // 30 seconds max wait
+            const maxAttempts = 30;
             
             while (!receipt && attempts < maxAttempts) {
               try {
                 receipt = await publicClient.waitForTransactionReceipt({
                   hash: result.transactionHash as `0x${string}`,
                 });
-                break; // Success, exit loop
+                break;
               } catch (error: any) {
-                // If it's a "Transaction not found" error, wait and retry
                 if (error?.message?.includes("not found") || error?.message?.includes("not yet")) {
                   await new Promise(resolve => setTimeout(resolve, 1000));
                   attempts++;
                 } else {
-                  // Other error, throw it
                   throw error;
                 }
               }
@@ -305,20 +375,22 @@ export function SubmitAPIForm() {
 
             setSuccess(true);
 
-            // Register the token with the backend API (with all APIs)
+            // Register the server with the backend API (with all APIs and slugs)
             try {
               const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
               
-              // Format APIs for backend - all fields are required and trimmed
+              // Format APIs for backend with slugs
               const formattedApis = apis.map(api => ({
+                slug: api.slug.toLowerCase().trim(),
                 name: api.name.trim(),
                 apiUrl: api.apiUrl.trim(),
                 description: api.description.trim(),
               }));
               
-              // Build registration payload with all required fields trimmed
+              // Build registration payload with slugs
               const registerPayload = {
                 tokenAddress: tokenAddress.toLowerCase(),
+                slug: formData.slug.toLowerCase().trim(),
                 name: formData.name.trim(),
                 symbol: formData.symbol.trim(),
                 apis: formattedApis,
@@ -327,7 +399,7 @@ export function SubmitAPIForm() {
                 subscriptionFee: subscriptionFeeWei.toString(),
               };
               
-              console.log("📝 Registering token with backend:", registerPayload);
+              console.log("📝 Registering server with backend:", registerPayload);
               
               const registerResponse = await fetch(`${baseUrl}/api/register`, {
                 method: "POST",
@@ -339,21 +411,21 @@ export function SubmitAPIForm() {
 
               if (registerResponse.ok) {
                 const result = await registerResponse.json();
-                console.log(`✅ Token registered successfully with backend (${formattedApis.length} APIs)`, result);
+                console.log(`✅ Server registered successfully with backend (${formattedApis.length} APIs)`, result);
               } else {
                 let errorMessage = "Unknown error";
                 try {
                   const errorJson = await registerResponse.json();
                   errorMessage = errorJson.message || errorJson.error || JSON.stringify(errorJson);
-                  console.error("⚠️ Failed to register token with backend:", errorJson);
+                  console.error("⚠️ Failed to register server with backend:", errorJson);
                 } catch {
                   errorMessage = await registerResponse.text();
-                  console.error("⚠️ Failed to register token with backend:", errorMessage);
+                  console.error("⚠️ Failed to register server with backend:", errorMessage);
                 }
                 setError(`Transaction succeeded but registration failed: ${errorMessage}`);
               }
             } catch (registerError: any) {
-              console.error("⚠️ Error registering token with backend:", registerError);
+              console.error("⚠️ Error registering server with backend:", registerError);
               setError(`Transaction succeeded but registration failed: ${registerError.message}`);
             }
 
@@ -370,16 +442,13 @@ export function SubmitAPIForm() {
           console.error("❌ Transaction error:", err);
           console.error("Error details:", JSON.stringify(err, null, 2));
           
-          // Try to extract more detailed error message
           let errorMessage = err.message || "Transaction failed";
           
-          // Check for specific revert reasons
           if (err.data || err.reason) {
             const revertReason = err.data || err.reason;
             errorMessage = `Transaction reverted: ${revertReason}`;
           }
           
-          // Check for common contract errors
           if (err.message?.includes("execution reverted")) {
             errorMessage = "Transaction reverted. Possible reasons:\n" +
               "- Invalid API URL format\n" +
@@ -422,8 +491,8 @@ export function SubmitAPIForm() {
     );
   }
 
-  // If builder already has a server (token), show message and redirect to dashboard
-  if (existingToken) {
+  // If builder already has a server, show message and redirect to dashboard
+  if (existingServer) {
     return (
       <div className="submit-page">
         <div className="existing-token-notice">
@@ -433,19 +502,19 @@ export function SubmitAPIForm() {
           <div className="existing-token-info">
             <div className="token-info-row">
               <span className="label">Server Name:</span>
-              <span className="value">{existingToken.name}</span>
+              <span className="value">{existingServer.name}</span>
+            </div>
+            <div className="token-info-row">
+              <span className="label">Server Slug:</span>
+              <span className="value">{existingServer.slug}</span>
             </div>
             <div className="token-info-row">
               <span className="label">Symbol:</span>
-              <span className="value">{existingToken.symbol}</span>
-            </div>
-            <div className="token-info-row">
-              <span className="label">Server Address:</span>
-              <span className="value">{existingToken.id}</span>
+              <span className="value">{existingServer.symbol}</span>
             </div>
             <div className="token-info-row">
               <span className="label">APIs Registered:</span>
-              <span className="value">{existingToken.apiCount || existingToken.apis?.length || 1}</span>
+              <span className="value">{existingServer.apiCount || existingServer.apis?.length || 1}</span>
             </div>
           </div>
           
@@ -462,7 +531,7 @@ export function SubmitAPIForm() {
             </button>
             <button 
               className="btn btn-secondary"
-              onClick={() => navigate(`/api/${existingToken.id}`)}
+              onClick={() => navigate(`/server/${existingServer.slug}`)}
             >
               🔍 View Server Details
             </button>
@@ -503,14 +572,35 @@ export function SubmitAPIForm() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="symbol">Server Symbol *</label>
+            <label htmlFor="slug">Server Slug *</label>
+            <input
+              id="slug"
+              name="slug"
+              type="text"
+              value={formData.slug}
+              onChange={handleInputChange}
+              placeholder="my-api-server"
+              required
+              className="input"
+              maxLength={30}
+            />
+            <small>
+              Used in URL: <code>/api/{formData.slug || "your-slug"}/api-name</code>
+              <br />
+              3-30 chars, lowercase alphanumeric with hyphens
+            </small>
+            {slugError && <span className="field-error">{slugError}</span>}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="symbol">Token Symbol *</label>
             <input
               id="symbol"
               name="symbol"
               type="text"
               value={formData.symbol}
               onChange={handleInputChange}
-              placeholder="MYSERVER"
+              placeholder="MYAPI"
               required
               maxLength={10}
               className="input"
@@ -521,7 +611,7 @@ export function SubmitAPIForm() {
         <div className="form-section">
           <h3>API Endpoints</h3>
           <p className="section-description">
-            Register one or more APIs under your token. All APIs share the same subscription fee.
+            Register one or more APIs under your server. All APIs share the same subscription fee.
           </p>
           
           {apis.map((api, index) => (
@@ -552,6 +642,22 @@ export function SubmitAPIForm() {
               </div>
 
               <div className="form-group">
+                <label>API Slug *</label>
+                <input
+                  type="text"
+                  value={api.slug}
+                  onChange={(e) => handleApiChange(index, 'slug', e.target.value)}
+                  placeholder="pool-snapshot"
+                  required
+                  className="input"
+                  maxLength={30}
+                />
+                <small>
+                  URL: <code>/api/{formData.slug || "server"}/{api.slug || "api-slug"}</code>
+                </small>
+              </div>
+
+              <div className="form-group">
                 <label>API Endpoint URL *</label>
                 <input
                   type="url"
@@ -561,6 +667,7 @@ export function SubmitAPIForm() {
                   required
                   className="input"
                 />
+                <small>Your backend endpoint (kept private, never exposed to users)</small>
               </div>
 
               <div className="form-group">
@@ -604,8 +711,6 @@ export function SubmitAPIForm() {
             />
             <small>Amount users pay per API call (in USDC)</small>
           </div>
-
-
         </div>
 
         {error && (
@@ -616,7 +721,7 @@ export function SubmitAPIForm() {
 
         {success && (
           <div className="success-box">
-            <strong>✅ Success!</strong> Your API has been submitted.
+            <strong>✅ Success!</strong> Your server has been registered.
             {txHash && (
               <p>
                 Transaction:{" "}
@@ -642,13 +747,13 @@ export function SubmitAPIForm() {
             ? "Submitting Transaction..."
             : success
             ? "Submitted!"
-            : "🚀 Submit API"}
+            : "🚀 Register Server"}
         </button>
 
         <div className="form-info">
           <p>
-            <strong>Note:</strong> Submitting an API will create a new token contract and register it
-            on the IAO Launchpad. This requires a transaction on Base mainnet.
+            <strong>Note:</strong> Registering a server will create a new token contract and register it
+            on the IAO Launchpad. This requires a transaction on Base Sepolia.
           </p>
           <p>
             <strong>Payment Token:</strong> USDC on Base ({USDC_ADDRESS})
@@ -658,4 +763,3 @@ export function SubmitAPIForm() {
     </div>
   );
 }
-

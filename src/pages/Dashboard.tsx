@@ -1,44 +1,66 @@
 import { useState, useEffect } from "react";
 import { useActiveAccount } from "thirdweb/react";
-import { getAllAPIs, addApiToToken, IAOTokenEntry, ApiEntry } from "../utils/api";
+import { getAllServers, addApiToServer, ServerEntry } from "../utils/api";
 import "./Dashboard.css";
 
-// @ts-ignore - Vite env variable
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+// Validate slug format: lowercase alphanumeric with hyphens, 3-30 chars
+function isValidSlug(slug: string): boolean {
+  return /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(slug);
+}
+
+// Generate slug suggestion from name
+function generateSlugFromName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 30);
+}
 
 export function Dashboard() {
   const account = useActiveAccount();
-  const [myToken, setMyToken] = useState<IAOTokenEntry | null>(null);
+  const [myServer, setMyServer] = useState<ServerEntry | null>(null);
   const [loading, setLoading] = useState(true);
   
   // Add API form state
   const [showAddForm, setShowAddForm] = useState(false);
+  const [newApiSlug, setNewApiSlug] = useState("");
   const [newApiName, setNewApiName] = useState("");
   const [newApiUrl, setNewApiUrl] = useState("");
   const [newApiDescription, setNewApiDescription] = useState("");
   const [addingApi, setAddingApi] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addSuccess, setAddSuccess] = useState(false);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
   useEffect(() => {
     if (account) {
-      loadMyToken();
+      loadMyServer();
     }
   }, [account]);
 
-  const loadMyToken = async () => {
+  // Auto-generate slug from name (only if not manually edited)
+  useEffect(() => {
+    if (newApiName && !slugManuallyEdited) {
+      setNewApiSlug(generateSlugFromName(newApiName));
+    }
+  }, [newApiName, slugManuallyEdited]);
+
+  const loadMyServer = async () => {
     try {
       setLoading(true);
-      const allAPIs = await getAllAPIs();
-      // Find the token created by current user (1 builder = 1 token)
+      const allServers = await getAllServers();
+      // Find the server created by current user (1 builder = 1 server)
       if (account) {
-        const userToken = allAPIs.find(
-          (api) => api.builder.toLowerCase() === account.address.toLowerCase()
+        const userServer = allServers.find(
+          (server) => server.builder.toLowerCase() === account.address.toLowerCase()
         );
-        setMyToken(userToken || null);
+        setMyServer(userServer || null);
       }
     } catch (error) {
-      console.error("Failed to load token:", error);
+      console.error("Failed to load server:", error);
     } finally {
       setLoading(false);
     }
@@ -50,14 +72,37 @@ export function Dashboard() {
     return `$${usdcAmount.toFixed(2)}`;
   };
 
+  const handleSlugChange = (value: string) => {
+    // Force lowercase and remove invalid characters
+    const slugValue = value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    setNewApiSlug(slugValue);
+    setSlugManuallyEdited(true); // User manually edited, stop auto-generating
+  };
+
   const handleAddApi = async () => {
-    if (!myToken || !account) return;
+    if (!myServer || !account) return;
     
-    // Validate
+    // Validate slug
+    if (!newApiSlug.trim()) {
+      setAddError("API slug is required");
+      return;
+    }
+    if (!isValidSlug(newApiSlug)) {
+      setAddError("API slug must be 3-30 characters, lowercase alphanumeric with hyphens");
+      return;
+    }
+    // Check for duplicate slug
+    if (myServer.apis?.some(api => api.slug === newApiSlug)) {
+      setAddError(`API slug "${newApiSlug}" already exists. Choose a different slug.`);
+      return;
+    }
+    
+    // Validate name
     if (!newApiName.trim()) {
       setAddError("API name is required");
       return;
     }
+    // Validate URL
     if (!newApiUrl.trim()) {
       setAddError("API URL is required");
       return;
@@ -68,6 +113,7 @@ export function Dashboard() {
       setAddError("Invalid API URL");
       return;
     }
+    // Validate description
     if (!newApiDescription.trim()) {
       setAddError("Description is required");
       return;
@@ -78,8 +124,9 @@ export function Dashboard() {
     setAddSuccess(false);
 
     try {
-      const result = await addApiToToken({
-        tokenAddress: myToken.id,
+      const result = await addApiToServer({
+        serverSlug: myServer.slug,
+        slug: newApiSlug.toLowerCase().trim(),
         name: newApiName.trim(),
         apiUrl: newApiUrl.trim(),
         description: newApiDescription.trim(),
@@ -88,12 +135,14 @@ export function Dashboard() {
 
       if (result.success) {
         setAddSuccess(true);
+        setNewApiSlug("");
         setNewApiName("");
         setNewApiUrl("");
         setNewApiDescription("");
+        setSlugManuallyEdited(false); // Reset for next API
         setShowAddForm(false);
-        // Reload token data
-        await loadMyToken();
+        // Reload server data
+        await loadMyServer();
       } else {
         setAddError(result.error || "Failed to add API");
       }
@@ -128,7 +177,7 @@ export function Dashboard() {
           <h2>🖥️ My Server</h2>
           {loading ? (
             <div className="loading-state">Loading your server...</div>
-          ) : !myToken ? (
+          ) : !myServer ? (
             <div className="empty-state">
               <p>You haven't registered a server yet.</p>
               <a href="/submit" className="btn btn-primary">
@@ -139,34 +188,35 @@ export function Dashboard() {
             <div className="token-card">
               <div className="token-header">
                 <div className="token-title">
-                  <h3>{myToken.name}</h3>
-                  <span className="token-symbol">{myToken.symbol}</span>
+                  <h3>{myServer.name}</h3>
+                  <span className="token-symbol">{myServer.symbol}</span>
                 </div>
+                <div className="server-slug-display">/{myServer.slug}</div>
                 <div className="token-stats">
                   <div className="stat">
-                    <span className="stat-value">{formatFee(myToken.subscriptionFee)}</span>
+                    <span className="stat-value">{formatFee(myServer.subscriptionFee)}</span>
                     <span className="stat-label">per call</span>
                   </div>
                   <div className="stat">
-                    <span className="stat-value">{myToken.subscriptionCount || "0"}</span>
+                    <span className="stat-value">{myServer.subscriptionCount || "0"}</span>
                     <span className="stat-label">total usage</span>
                   </div>
                   <div className="stat">
-                    <span className="stat-value">{myToken.apiCount || myToken.apis?.length || 1}</span>
+                    <span className="stat-value">{myServer.apiCount || myServer.apis?.length || 0}</span>
                     <span className="stat-label">APIs</span>
                   </div>
                 </div>
               </div>
               <div className="token-address">
-                <span className="label">Server Address:</span>
-                <code>{myToken.id}</code>
+                <span className="label">Token Address:</span>
+                <code>{myServer.id}</code>
               </div>
             </div>
           )}
         </div>
 
         {/* APIs Section */}
-        {myToken && (
+        {myServer && (
           <div className="dashboard-section">
             <div className="section-header">
               <h2>🔌 My APIs</h2>
@@ -193,6 +243,20 @@ export function Dashboard() {
                   />
                 </div>
                 <div className="form-group">
+                  <label>API Slug *</label>
+                  <input
+                    type="text"
+                    value={newApiSlug}
+                    onChange={(e) => handleSlugChange(e.target.value)}
+                    placeholder="pool-snapshot"
+                    className="input"
+                    maxLength={30}
+                  />
+                  <small>
+                    URL: <code>/api/{myServer.slug}/{newApiSlug || "api-slug"}</code>
+                  </small>
+                </div>
+                <div className="form-group">
                   <label>API Endpoint URL *</label>
                   <input
                     type="url"
@@ -201,6 +265,7 @@ export function Dashboard() {
                     placeholder="https://api.example.com/endpoint"
                     className="input"
                   />
+                  <small>Your backend endpoint (kept private)</small>
                 </div>
                 <div className="form-group">
                   <label>Description *</label>
@@ -226,11 +291,11 @@ export function Dashboard() {
 
             {/* APIs List */}
             <div className="apis-list">
-              {myToken.apis && myToken.apis.length > 0 ? (
-                myToken.apis.map((api) => (
-                  <div key={api.index} className="api-card">
+              {myServer.apis && myServer.apis.length > 0 ? (
+                myServer.apis.map((api) => (
+                  <div key={api.slug} className="api-card">
                     <div className="api-card-header">
-                      <span className="api-index">#{api.index}</span>
+                      <code className="api-slug-badge">/{myServer.slug}/{api.slug}</code>
                       <h4>{api.name}</h4>
                     </div>
                     {api.description && (
@@ -266,4 +331,3 @@ export function Dashboard() {
     </div>
   );
 }
-

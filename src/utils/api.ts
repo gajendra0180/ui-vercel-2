@@ -4,27 +4,29 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 /**
- * Individual API entry within a token
- * Multiple APIs can be registered under a single token (1 builder = 1 token = N APIs)
+ * Individual API entry within a server
+ * Multiple APIs can be registered under a single server (1 builder = 1 server = N APIs)
  */
 export interface ApiEntry {
   index: number;        // 0-based index (order of registration)
+  slug: string;         // Unique slug within the server (e.g., "eigenpie-pool")
   name: string;         // API name
-  description?: string; // Optional description
+  description: string;  // Description (required)
   createdAt: string;    // ISO timestamp
   // Note: apiUrl is NOT included - hidden from frontend for security
 }
 
 /**
- * IAO Token entry representing a builder
- * One builder has one token, which can have multiple APIs
+ * Server entry representing a builder
+ * One builder has one server (token), which can have multiple APIs
  */
-export interface IAOTokenEntry {
+export interface ServerEntry {
   id: string;                    // Token address
+  slug: string;                  // Unique server slug (e.g., "magpie")
   builder: string;               // Builder address
-  name: string;                  // Token/Builder name
+  name: string;                  // Server name
   symbol: string;                // Token symbol
-  subscriptionFee: string;       // Fee for all APIs under this token
+  subscriptionFee: string;       // Fee for all APIs under this server
   paymentToken: string;          // Payment token address
   subscriptionCount?: string;    // Total usage count (aggregated across all APIs)
   apis?: ApiEntry[];             // Array of registered APIs
@@ -33,66 +35,72 @@ export interface IAOTokenEntry {
   updatedAt?: string;            // Last update timestamp
 }
 
+// Alias for backward compatibility
+export type IAOTokenEntry = ServerEntry;
+
 /**
- * Get all registered IAO tokens from backend
+ * Get all registered servers from backend
  */
-export async function getAllAPIs(): Promise<IAOTokenEntry[]> {
+export async function getAllServers(): Promise<ServerEntry[]> {
   try {
     const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-    const response = await fetch(`${baseUrl}/api/tokens`);
+    const response = await fetch(`${baseUrl}/api/servers`);
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch APIs: ${response.status}`);
+      throw new Error(`Failed to fetch servers: ${response.status}`);
     }
 
     const data = await response.json();
-    if (data.success && Array.isArray(data.tokens)) {
-      return data.tokens;
+    if (data.success && Array.isArray(data.servers)) {
+      return data.servers;
     }
     
     return [];
   } catch (error) {
-    console.error("Error fetching APIs:", error);
+    console.error("Error fetching servers:", error);
     return [];
   }
 }
 
+// Alias for backward compatibility
+export const getAllAPIs = getAllServers;
+
 /**
- * Get a specific IAO token by address
+ * Get a specific server by slug
  */
-export async function getAPIByAddress(tokenAddress: string): Promise<IAOTokenEntry | null> {
+export async function getServerBySlug(serverSlug: string): Promise<ServerEntry | null> {
   try {
     const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-    const response = await fetch(`${baseUrl}/api/token/${tokenAddress}`);
+    const response = await fetch(`${baseUrl}/api/server/${serverSlug}`);
     
     if (!response.ok) {
       if (response.status === 404) {
         return null;
       }
-      throw new Error(`Failed to fetch API: ${response.status}`);
+      throw new Error(`Failed to fetch server: ${response.status}`);
     }
 
     const data = await response.json();
-    if (data.success && data.token) {
-      return data.token;
+    if (data.success && data.server) {
+      return data.server;
     }
     
     return null;
   } catch (error) {
-    console.error("Error fetching API by address:", error);
+    console.error("Error fetching server by slug:", error);
     return null;
   }
 }
 
 /**
- * Get trending APIs (sorted by subscription count)
+ * Get trending servers (sorted by subscription count)
  */
-export async function getTrendingAPIs(limit: number = 10): Promise<IAOTokenEntry[]> {
+export async function getTrendingServers(limit: number = 10): Promise<ServerEntry[]> {
   try {
-    const allAPIs = await getAllAPIs();
+    const allServers = await getAllServers();
     
     // Sort by subscription count (descending)
-    const sorted = allAPIs.sort((a, b) => {
+    const sorted = allServers.sort((a, b) => {
       const aCount = parseInt(a.subscriptionCount || "0");
       const bCount = parseInt(b.subscriptionCount || "0");
       return bCount - aCount;
@@ -100,23 +108,27 @@ export async function getTrendingAPIs(limit: number = 10): Promise<IAOTokenEntry
 
     return sorted.slice(0, limit);
   } catch (error) {
-    console.error("Error fetching trending APIs:", error);
+    console.error("Error fetching trending servers:", error);
     return [];
   }
 }
 
+// Alias for backward compatibility
+export const getTrendingAPIs = getTrendingServers;
+
 /**
- * Register a new token with multiple APIs
+ * Register a new server with multiple APIs
  */
-export async function registerToken(tokenData: {
+export async function registerServer(serverData: {
   tokenAddress: string;
+  slug: string;                  // Server slug (e.g., "magpie")
   name: string;
   symbol: string;
-  apis: { name: string; apiUrl: string; description?: string }[];
+  apis: { slug: string; name: string; apiUrl: string; description: string }[];
   builder: string;
   paymentToken: string;
   subscriptionFee: string;
-}): Promise<{ success: boolean; token?: any; error?: string }> {
+}): Promise<{ success: boolean; server?: ServerEntry; error?: string }> {
   try {
     const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
     const response = await fetch(`${baseUrl}/api/register`, {
@@ -124,30 +136,34 @@ export async function registerToken(tokenData: {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(tokenData),
+      body: JSON.stringify(serverData),
     });
 
     const data = await response.json();
     
     if (response.ok && data.success) {
-      return { success: true, token: data.token };
+      return { success: true, server: data.token };
     } else {
       return { success: false, error: data.message || "Registration failed" };
     }
   } catch (error: any) {
-    console.error("Error registering token:", error);
+    console.error("Error registering server:", error);
     return { success: false, error: error.message || "Network error" };
   }
 }
 
+// Alias for backward compatibility
+export const registerToken = registerServer;
+
 /**
- * Add a new API to an existing token
+ * Add a new API to an existing server
  */
-export async function addApiToToken(data: {
-  tokenAddress: string;
+export async function addApiToServer(data: {
+  serverSlug: string;
+  slug: string;         // API slug
   name: string;
   apiUrl: string;
-  description?: string;
+  description: string;
   builder: string;
 }): Promise<{ success: boolean; api?: ApiEntry; error?: string }> {
   try {
@@ -173,22 +189,44 @@ export async function addApiToToken(data: {
   }
 }
 
+// Alias for backward compatibility
+export const addApiToToken = addApiToServer;
+
 /**
- * Get APIs grouped by builder
- * Returns a map of builder address -> token entry (with all their APIs)
+ * Get servers grouped by builder
+ * Returns a map of builder address -> server entry (with all their APIs)
  */
-export async function getAPIsByBuilder(): Promise<Map<string, IAOTokenEntry>> {
+export async function getServersByBuilder(): Promise<Map<string, ServerEntry>> {
   try {
-    const allAPIs = await getAllAPIs();
-    const byBuilder = new Map<string, IAOTokenEntry>();
+    const allServers = await getAllServers();
+    const byBuilder = new Map<string, ServerEntry>();
     
-    for (const api of allAPIs) {
-      byBuilder.set(api.builder.toLowerCase(), api);
+    for (const server of allServers) {
+      byBuilder.set(server.builder.toLowerCase(), server);
     }
     
     return byBuilder;
   } catch (error) {
-    console.error("Error fetching APIs by builder:", error);
+    console.error("Error fetching servers by builder:", error);
     return new Map();
   }
+}
+
+// Alias for backward compatibility  
+export const getAPIsByBuilder = getServersByBuilder;
+
+/**
+ * Check if a server slug exists
+ */
+export async function checkServerSlugExists(slug: string): Promise<boolean> {
+  const server = await getServerBySlug(slug);
+  return server !== null;
+}
+
+/**
+ * Build the proxy URL for an API call
+ */
+export function buildProxyUrl(serverSlug: string, apiSlug: string): string {
+  const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  return `${baseUrl}/api/${serverSlug}/${apiSlug}`;
 }

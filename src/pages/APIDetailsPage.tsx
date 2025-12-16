@@ -1,52 +1,53 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { IAOTokenEntry, getAPIByAddress } from "../utils/api";
+import { ServerEntry, getServerBySlug, buildProxyUrl } from "../utils/api";
 import { useX402Payment } from "../hooks/useX402Payment";
-// @ts-ignore - Vite env variable
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 import "./APIDetailsPage.css";
 
 export function APIDetailsPage() {
-  const { address } = useParams<{ address: string }>();
+  const { serverSlug } = useParams<{ serverSlug: string }>();
   const navigate = useNavigate();
   const { callAPIWithPayment, isProcessing, isReady, account } = useX402Payment();
 
-  const [api, setApi] = useState<IAOTokenEntry | null>(null);
+  const [server, setServer] = useState<ServerEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
   const [testingWithoutPayment, setTestingWithoutPayment] = useState(false);
   const [apiResult, setApiResult] = useState<any>(null);
   const [metadataResult, setMetadataResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  const [queryParams, setQueryParams] = useState("");
-  const [selectedApiIndex, setSelectedApiIndex] = useState<number>(0); // Selected API index
+  const [selectedApiSlug, setSelectedApiSlug] = useState<string | null>(null);
 
   useEffect(() => {
-    if (address) {
-      loadAPIDetails();
+    if (serverSlug) {
+      loadServerDetails();
     }
-  }, [address]);
+  }, [serverSlug]);
 
-  const loadAPIDetails = async () => {
-    if (!address) return;
+  const loadServerDetails = async () => {
+    if (!serverSlug) return;
     try {
       setLoading(true);
-      const apiData = await getAPIByAddress(address);
-      if (!apiData) {
-        setError("API not found");
+      const serverData = await getServerBySlug(serverSlug);
+      if (!serverData) {
+        setError("Server not found");
       } else {
-        setApi(apiData);
+        setServer(serverData);
+        // Select first API by default
+        if (serverData.apis && serverData.apis.length > 0) {
+          setSelectedApiSlug(serverData.apis[0].slug);
+        }
       }
     } catch (err: any) {
-      setError(err.message || "Failed to load API details");
+      setError(err.message || "Failed to load server details");
     } finally {
       setLoading(false);
     }
   };
 
   const handleTestWithoutPayment = async () => {
-    if (!address) {
-      setError("No address provided");
+    if (!serverSlug) {
+      setError("No server slug provided");
       return;
     }
 
@@ -55,25 +56,25 @@ export function APIDetailsPage() {
     setMetadataResult(null);
 
     try {
-      // Use getAPIByAddress to fetch token metadata (no payment required)
-      const apiData = await getAPIByAddress(address);
-      if (apiData) {
-        setMetadataResult({ token: apiData });
+      // Fetch server metadata (no payment required)
+      const serverData = await getServerBySlug(serverSlug);
+      if (serverData) {
+        setMetadataResult({ server: serverData });
         setError(null);
       } else {
-        throw new Error("API not found");
+        throw new Error("Server not found");
       }
     } catch (err: any) {
-      setError(err.message || "Failed to fetch API metadata");
-      console.error("API test error:", err);
+      setError(err.message || "Failed to fetch server metadata");
+      console.error("Server test error:", err);
     } finally {
       setTestingWithoutPayment(false);
     }
   };
 
   const handleTestAPI = async () => {
-    if (!address || !api) {
-      setError("API not loaded");
+    if (!serverSlug || !server || !selectedApiSlug) {
+      setError("Please select an API to test");
       return;
     }
 
@@ -87,26 +88,17 @@ export function APIDetailsPage() {
     setApiResult(null);
 
     try {
-      // Build URL with query parameters and API index
-      const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-      // Use /api/:address/:index format to specify which API to call
-      let url = `${baseUrl}/api/${address}/${selectedApiIndex}`;
-
-      // Add query parameters if provided
-      if (queryParams.trim()) {
-        // Parse query params string (e.g., "key=value&key2=value2")
-        const params = new URLSearchParams(queryParams);
-        url += `?${params.toString()}`;
-      }
+      // Build URL with server slug and API slug
+      const url = buildProxyUrl(serverSlug, selectedApiSlug);
 
       // Convert subscription fee to bigint
-      const subscriptionFee = BigInt(api.subscriptionFee);
+      const subscriptionFee = BigInt(server.subscriptionFee);
       
       // Call API with payment - user will be prompted to sign
       const data = await callAPIWithPayment(
         url,
         subscriptionFee,
-        api.id // receiver address (token address)
+        server.id // receiver address (token address)
       );
 
       setApiResult(data);
@@ -120,7 +112,7 @@ export function APIDetailsPage() {
   };
 
   // Get selected API details
-  const selectedApi = api?.apis?.[selectedApiIndex] || null;
+  const selectedApi = server?.apis?.find(api => api.slug === selectedApiSlug) || null;
 
   const formatFee = (fee: string) => {
     const feeNum = BigInt(fee);
@@ -128,16 +120,15 @@ export function APIDetailsPage() {
     return `$${usdcAmount.toFixed(2)}`;
   };
 
-
   if (loading) {
     return (
       <div className="api-details-page">
-        <div className="loading-state">Loading API details...</div>
+        <div className="loading-state">Loading server details...</div>
       </div>
     );
   }
 
-  if (error && !api) {
+  if (error && !server) {
     return (
       <div className="api-details-page">
         <div className="error-state">
@@ -150,7 +141,7 @@ export function APIDetailsPage() {
     );
   }
 
-  if (!api) {
+  if (!server) {
     return null;
   }
 
@@ -162,59 +153,63 @@ export function APIDetailsPage() {
 
       <div className="api-header">
         <div className="api-title-section">
-          <h1>🌐 {api.name}</h1>
-          <span className="api-symbol-badge">{api.symbol}</span>
+          <h1>🖥️ {server.name}</h1>
+          <span className="api-symbol-badge">{server.symbol}</span>
         </div>
         <div className="api-pricing">
           <div className="price-badge">
-            <span className="price-label">Price</span>
-            <span className="price-value">{formatFee(api.subscriptionFee)}</span>
+            <span className="price-label">Price per call</span>
+            <span className="price-value">{formatFee(server.subscriptionFee)}</span>
           </div>
         </div>
       </div>
 
       <div className="api-info-section">
         <div className="info-card">
-          <h3>📋 Builder Information</h3>
+          <h3>📋 Server Information</h3>
           <div className="info-grid">
             <div className="info-item">
+              <span className="info-label">Server Slug:</span>
+              <span className="info-value slug-value">{server.slug}</span>
+            </div>
+            <div className="info-item">
               <span className="info-label">Token Address:</span>
-              <span className="info-value">{api.id}</span>
+              <span className="info-value">{server.id}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Builder Address:</span>
-              <span className="info-value">{api.builder}</span>
+              <span className="info-value">{server.builder}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Payment Token:</span>
-              <span className="info-value">{api.paymentToken}</span>
+              <span className="info-value">{server.paymentToken}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Total Usage:</span>
-              <span className="info-value">{api.subscriptionCount || "0"}</span>
+              <span className="info-value">{server.subscriptionCount || "0"}</span>
             </div>
             <div className="info-item">
               <span className="info-label">APIs Available:</span>
-              <span className="info-value">{api.apiCount || api.apis?.length || 1}</span>
+              <span className="info-value">{server.apiCount || server.apis?.length || 0}</span>
             </div>
           </div>
         </div>
 
         {/* APIs List */}
-        {api.apis && api.apis.length > 0 && (
+        {server.apis && server.apis.length > 0 && (
           <div className="info-card">
             <h3>🔌 Available APIs</h3>
             <div className="apis-list">
-              {api.apis.map((apiItem) => (
+              {server.apis.map((apiItem) => (
                 <div 
-                  key={apiItem.index} 
-                  className={`api-item ${selectedApiIndex === apiItem.index ? 'selected' : ''}`}
-                  onClick={() => setSelectedApiIndex(apiItem.index)}
+                  key={apiItem.slug} 
+                  className={`api-item ${selectedApiSlug === apiItem.slug ? 'selected' : ''}`}
+                  onClick={() => setSelectedApiSlug(apiItem.slug)}
                 >
                   <div className="api-item-header">
-                    <span className="api-index">#{apiItem.index}</span>
+                    <span className="api-slug-badge">/{server.slug}/{apiItem.slug}</span>
                     <span className="api-name">{apiItem.name}</span>
-                    {selectedApiIndex === apiItem.index && <span className="selected-badge">✓ Selected</span>}
+                    {selectedApiSlug === apiItem.slug && <span className="selected-badge">✓ Selected</span>}
                   </div>
                   {apiItem.description && (
                     <p className="api-description">{apiItem.description}</p>
@@ -233,29 +228,13 @@ export function APIDetailsPage() {
           {/* Show selected API */}
           {selectedApi && (
             <div className="selected-api-info">
-              <p><strong>Selected API:</strong> #{selectedApi.index} - {selectedApi.name}</p>
+              <p><strong>Selected API:</strong> {selectedApi.name}</p>
+              <p className="api-url-preview"><code>/api/{server.slug}/{selectedApi.slug}</code></p>
               {selectedApi.description && <p className="api-desc">{selectedApi.description}</p>}
             </div>
           )}
           
-          <p className="test-description">
-            Enter query parameters (e.g., "key=value&key2=value2") or leave empty for default request
-          </p>
-
           <div className="test-form">
-            <div className="form-group">
-              <label htmlFor="queryParams">Query Parameters (optional):</label>
-              <input
-                id="queryParams"
-                type="text"
-                value={queryParams}
-                onChange={(e) => setQueryParams(e.target.value)}
-                placeholder="key=value&key2=value2"
-                className="input"
-                disabled={testing || testingWithoutPayment}
-              />
-            </div>
-
             <div className="button-group" style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
               <button
                 className="btn btn-secondary btn-large"
@@ -268,9 +247,9 @@ export function APIDetailsPage() {
               <button
                 className="btn btn-primary btn-large"
                 onClick={handleTestAPI}
-                disabled={testing || isProcessing || !isReady}
+                disabled={testing || isProcessing || !isReady || !selectedApiSlug}
               >
-                {testing || isProcessing ? "Signing Transaction..." : `💳 Pay & Test API #${selectedApiIndex}`}
+                {testing || isProcessing ? "Signing Transaction..." : `💳 Pay & Test: ${selectedApi?.name || 'Select API'}`}
               </button>
             </div>
 
@@ -287,7 +266,7 @@ export function APIDetailsPage() {
 
           {metadataResult && (
             <div className="result-box">
-              <h4>📋 Token Metadata (No Payment)</h4>
+              <h4>📋 Server Metadata (No Payment)</h4>
               <div className="result-data">
                 <pre>{JSON.stringify(metadataResult, null, 2)}</pre>
               </div>
@@ -299,8 +278,8 @@ export function APIDetailsPage() {
               <h4>✅ Paid API Response</h4>
               <div className="result-info">
                 <p><strong>Payment Status:</strong> {apiResult.payment?.status || "paid"}</p>
-                <p><strong>Subscription Fee:</strong> {apiResult.payment?.subscriptionFee || api.subscriptionFee}</p>
-                <p><strong>API Called:</strong> #{apiResult.proxy?.apiIndex ?? selectedApiIndex} - {apiResult.proxy?.apiName || selectedApi?.name || "API"}</p>
+                <p><strong>Subscription Fee:</strong> {apiResult.payment?.subscriptionFee || server.subscriptionFee}</p>
+                <p><strong>API Called:</strong> /{apiResult.proxy?.serverSlug || server.slug}/{apiResult.proxy?.apiSlug || selectedApiSlug}</p>
               </div>
               <div className="result-data">
                 <strong>API Data:</strong>
@@ -313,4 +292,3 @@ export function APIDetailsPage() {
     </div>
   );
 }
-
