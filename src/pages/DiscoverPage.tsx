@@ -345,16 +345,16 @@ export function DiscoverPage() {
         </section>
       )}
 
-      {remainingApis.length === 0 ? (
+      {filteredApis.length === 0 ? (
         <div className="empty-state">
           <p>
             {searchQuery || priceFilter !== "all"
               ? "No APIs match your current search & filters."
-              : "No APIs available yet."}
+              : "No APIs available yet. Be the first to submit!"}
           </p>
           <div className="empty-actions">
             <button className="btn btn-primary" onClick={() => navigate("/submit")}>
-              Be the first to submit!
+              Register Server
             </button>
             {(searchQuery || priceFilter !== "all") && (
               <button
@@ -369,7 +369,7 @@ export function DiscoverPage() {
             )}
           </div>
         </div>
-      ) : (
+      ) : remainingApis.length === 0 ? null : (
         <section className={`api-section ${viewMode === "list" ? "list-mode" : ""}`}>
           <div className={viewMode === "list" ? "api-list" : "api-grid"}>
             {remainingApis.map((api) => (
