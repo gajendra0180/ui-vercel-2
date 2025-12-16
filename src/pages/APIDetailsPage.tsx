@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { IAOTokenEntry, getAPIByAddress } from "../utils/api";
 import { useX402Payment } from "../hooks/useX402Payment";
 // @ts-ignore - Vite env variable
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://iaodeployment-git-basetestnet-gajendra-0180s-projects.vercel.app";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 import "./APIDetailsPage.css";
 
 export function APIDetailsPage() {
@@ -19,6 +19,7 @@ export function APIDetailsPage() {
   const [metadataResult, setMetadataResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [queryParams, setQueryParams] = useState("");
+  const [selectedApiIndex, setSelectedApiIndex] = useState<number>(0); // Selected API index
 
   useEffect(() => {
     if (address) {
@@ -86,9 +87,10 @@ export function APIDetailsPage() {
     setApiResult(null);
 
     try {
-      // Build URL with query parameters
+      // Build URL with query parameters and API index
       const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-      let url = `${baseUrl}/api/${address}`;
+      // Use /api/:address/:index format to specify which API to call
+      let url = `${baseUrl}/api/${address}/${selectedApiIndex}`;
 
       // Add query parameters if provided
       if (queryParams.trim()) {
@@ -116,6 +118,9 @@ export function APIDetailsPage() {
       setTesting(false);
     }
   };
+
+  // Get selected API details
+  const selectedApi = api?.apis?.[selectedApiIndex] || null;
 
   const formatFee = (fee: string) => {
     const feeNum = BigInt(fee);
@@ -170,15 +175,11 @@ export function APIDetailsPage() {
 
       <div className="api-info-section">
         <div className="info-card">
-          <h3>📋 API Information</h3>
+          <h3>📋 Builder Information</h3>
           <div className="info-grid">
             <div className="info-item">
               <span className="info-label">Token Address:</span>
               <span className="info-value">{api.id}</span>
-            </div>
-            <div className="info-item">
-              <span className="info-label">Builder Endpoint:</span>
-              <span className="info-value">{api.apiUrl}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Builder Address:</span>
@@ -189,16 +190,54 @@ export function APIDetailsPage() {
               <span className="info-value">{api.paymentToken}</span>
             </div>
             <div className="info-item">
-              <span className="info-label">Usage Count:</span>
+              <span className="info-label">Total Usage:</span>
               <span className="info-value">{api.subscriptionCount || "0"}</span>
+            </div>
+            <div className="info-item">
+              <span className="info-label">APIs Available:</span>
+              <span className="info-value">{api.apiCount || api.apis?.length || 1}</span>
             </div>
           </div>
         </div>
+
+        {/* APIs List */}
+        {api.apis && api.apis.length > 0 && (
+          <div className="info-card">
+            <h3>🔌 Available APIs</h3>
+            <div className="apis-list">
+              {api.apis.map((apiItem) => (
+                <div 
+                  key={apiItem.index} 
+                  className={`api-item ${selectedApiIndex === apiItem.index ? 'selected' : ''}`}
+                  onClick={() => setSelectedApiIndex(apiItem.index)}
+                >
+                  <div className="api-item-header">
+                    <span className="api-index">#{apiItem.index}</span>
+                    <span className="api-name">{apiItem.name}</span>
+                    {selectedApiIndex === apiItem.index && <span className="selected-badge">✓ Selected</span>}
+                  </div>
+                  {apiItem.description && (
+                    <p className="api-description">{apiItem.description}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="api-test-section">
         <div className="test-card">
           <h3>🧪 Test API</h3>
+          
+          {/* Show selected API */}
+          {selectedApi && (
+            <div className="selected-api-info">
+              <p><strong>Selected API:</strong> #{selectedApi.index} - {selectedApi.name}</p>
+              {selectedApi.description && <p className="api-desc">{selectedApi.description}</p>}
+            </div>
+          )}
+          
           <p className="test-description">
             Enter query parameters (e.g., "key=value&key2=value2") or leave empty for default request
           </p>
@@ -231,7 +270,7 @@ export function APIDetailsPage() {
                 onClick={handleTestAPI}
                 disabled={testing || isProcessing || !isReady}
               >
-                {testing || isProcessing ? "Signing Transaction..." : "💳 Pay & Test API"}
+                {testing || isProcessing ? "Signing Transaction..." : `💳 Pay & Test API #${selectedApiIndex}`}
               </button>
             </div>
 
@@ -261,7 +300,7 @@ export function APIDetailsPage() {
               <div className="result-info">
                 <p><strong>Payment Status:</strong> {apiResult.payment?.status || "paid"}</p>
                 <p><strong>Subscription Fee:</strong> {apiResult.payment?.subscriptionFee || api.subscriptionFee}</p>
-                <p><strong>Builder Endpoint:</strong> {apiResult.proxy?.builderEndpoint || api.apiUrl}</p>
+                <p><strong>API Called:</strong> #{apiResult.proxy?.apiIndex ?? selectedApiIndex} - {apiResult.proxy?.apiName || selectedApi?.name || "API"}</p>
               </div>
               <div className="result-data">
                 <strong>API Data:</strong>

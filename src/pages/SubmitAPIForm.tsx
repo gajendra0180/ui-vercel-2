@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useActiveAccount, useActiveWalletChain, useSendTransaction } from "thirdweb/react";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
@@ -8,24 +8,64 @@ import { baseSepolia as baseSepoliaViem } from "viem/chains";
 import { TOKEN_FACTORY_ADDRESS, TOKEN_FACTORY_ABI } from "../contracts/tokenFactory";
 import { USDC_ADDRESS } from "../constants/addresses";
 import { thirdwebClient } from "../lib/thirdwebClient";
+import { getAllAPIs, IAOTokenEntry } from "../utils/api";
 import "./SubmitAPIForm.css";
 
 // @ts-ignore - Vite env variable
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://iaodeployment-git-basetestnet-gajendra-0180s-projects.vercel.app";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export function SubmitAPIForm() {
   const navigate = useNavigate();
   const account = useActiveAccount();
   const chain = useActiveWalletChain();
   const { mutate: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
+  
+  // Check if builder already has a token
+  const [existingToken, setExistingToken] = useState<IAOTokenEntry | null>(null);
+  const [checkingExisting, setCheckingExisting] = useState(true);
+  
+  // Check if builder already has a registered token
+  useEffect(() => {
+    const checkExistingToken = async () => {
+      if (!account) {
+        setCheckingExisting(false);
+        return;
+      }
+      
+      try {
+        setCheckingExisting(true);
+        const allAPIs = await getAllAPIs();
+        const builderToken = allAPIs.find(
+          (api) => api.builder.toLowerCase() === account.address.toLowerCase()
+        );
+        setExistingToken(builderToken || null);
+      } catch (error) {
+        console.error("Error checking existing token:", error);
+      } finally {
+        setCheckingExisting(false);
+      }
+    };
+    
+    checkExistingToken();
+  }, [account]);
+
+  // API entry for the form
+  interface FormApiEntry {
+    name: string;
+    apiUrl: string;
+    description: string;
+  }
 
   const [formData, setFormData] = useState({
     name: "",
     symbol: "",
-    apiUrl: "",
     subscriptionFee: "",
-    description: "",
   });
+
+  // Support multiple APIs
+  const [apis, setApis] = useState<FormApiEntry[]>([
+    { name: "", apiUrl: "", description: "" }
+  ]);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -37,31 +77,60 @@ export function SubmitAPIForm() {
     setError(null);
   };
 
+  const handleApiChange = (index: number, field: keyof FormApiEntry, value: string) => {
+    const newApis = [...apis];
+    newApis[index] = { ...newApis[index], [field]: value };
+    setApis(newApis);
+    setError(null);
+  };
+
+  const addApi = () => {
+    setApis([...apis, { name: "", apiUrl: "", description: "" }]);
+  };
+
+  const removeApi = (index: number) => {
+    if (apis.length > 1) {
+      setApis(apis.filter((_, i) => i !== index));
+    }
+  };
+
   const validateForm = (): boolean => {
     if (!formData.name.trim()) {
-      setError("API name is required");
+      setError("Token name is required");
       return false;
     }
     if (!formData.symbol.trim()) {
-      setError("API symbol is required");
-      return false;
-    }
-    if (!formData.apiUrl.trim()) {
-      setError("API endpoint URL is required");
-      return false;
-    }
-    try {
-      new URL(formData.apiUrl);
-    } catch {
-      setError("Invalid API endpoint URL");
+      setError("Token symbol is required");
       return false;
     }
     if (!formData.subscriptionFee || parseFloat(formData.subscriptionFee) <= 0) {
       setError("Subscription fee must be greater than 0");
       return false;
     }
-    // Note: subscriptionTokenAmount is calculated by the contract internally
-    // We don't need to validate it here, but we can keep the field for display purposes
+    
+    // Validate all APIs
+    for (let i = 0; i < apis.length; i++) {
+      const api = apis[i];
+      if (!api.name.trim()) {
+        setError(`API #${i + 1}: Name is required`);
+        return false;
+      }
+      if (!api.apiUrl.trim()) {
+        setError(`API #${i + 1}: Endpoint URL is required`);
+        return false;
+      }
+      try {
+        new URL(api.apiUrl);
+      } catch {
+        setError(`API #${i + 1}: Invalid endpoint URL`);
+        return false;
+      }
+      if (!api.description.trim()) {
+        setError(`API #${i + 1}: Description is required`);
+        return false;
+      }
+    }
+    
     return true;
   };
 
@@ -100,13 +169,18 @@ export function SubmitAPIForm() {
       // We don't need to send it in the transaction
 
       // Log parameters for debugging
+      // Note: Contract only supports single apiURL, we use the first API's URL
+      // Additional APIs are registered via backend after token creation
+      const primaryApiUrl = apis[0].apiUrl;
+      
       console.log("📝 Preparing transaction with params:", {
         name: formData.name,
         symbol: formData.symbol,
-        apiURL: formData.apiUrl,
+        apiURL: primaryApiUrl,
         builder: account.address,
         paymentToken: USDC_ADDRESS,
         subscriptionFee: subscriptionFeeWei.toString(),
+        totalApis: apis.length,
         // subscriptionTokenAmount is calculated by contract internally
       });
 
@@ -153,6 +227,7 @@ export function SubmitAPIForm() {
 
       // Prepare contract call with tuple parameter
       // The contract only takes 6 parameters - subscriptionTokenAmount is calculated internally
+      // Note: Contract only supports single apiURL, we use the first API's URL
       const transaction = prepareContractCall({
         contract: tokenFactoryContract,
         method: "createToken",
@@ -160,7 +235,7 @@ export function SubmitAPIForm() {
           {
             name: formData.name.trim(),
             symbol: formData.symbol.trim(),
-            apiURL: formData.apiUrl.trim(),
+            apiURL: primaryApiUrl.trim(), // Use first API's URL for contract
             builder: account.address, // Builder is the user submitting the API
             paymentToken: USDC_ADDRESS,
             subscriptionFee: subscriptionFeeWei,
@@ -230,32 +305,52 @@ export function SubmitAPIForm() {
 
             setSuccess(true);
 
-            // Register the token with the backend API
+            // Register the token with the backend API (with all APIs)
             try {
               const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+              
+              // Format APIs for backend - all fields are required and trimmed
+              const formattedApis = apis.map(api => ({
+                name: api.name.trim(),
+                apiUrl: api.apiUrl.trim(),
+                description: api.description.trim(),
+              }));
+              
+              // Build registration payload with all required fields trimmed
+              const registerPayload = {
+                tokenAddress: tokenAddress.toLowerCase(),
+                name: formData.name.trim(),
+                symbol: formData.symbol.trim(),
+                apis: formattedApis,
+                builder: account.address.toLowerCase(),
+                paymentToken: USDC_ADDRESS.toLowerCase(),
+                subscriptionFee: subscriptionFeeWei.toString(),
+              };
+              
+              console.log("📝 Registering token with backend:", registerPayload);
               
               const registerResponse = await fetch(`${baseUrl}/api/register`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                  tokenAddress: tokenAddress,
-                  name: formData.name,
-                  symbol: formData.symbol,
-                  apiUrl: formData.apiUrl,
-                  builder: account.address,
-                  paymentToken: USDC_ADDRESS,
-                  subscriptionFee: subscriptionFeeWei.toString(),
-                }),
+                body: JSON.stringify(registerPayload),
               });
 
               if (registerResponse.ok) {
-                console.log("✅ Token registered successfully with backend");
+                const result = await registerResponse.json();
+                console.log(`✅ Token registered successfully with backend (${formattedApis.length} APIs)`, result);
               } else {
-                const errorText = await registerResponse.text();
-                console.error("⚠️ Failed to register token with backend:", errorText);
-                setError(`Transaction succeeded but registration failed: ${errorText}`);
+                let errorMessage = "Unknown error";
+                try {
+                  const errorJson = await registerResponse.json();
+                  errorMessage = errorJson.message || errorJson.error || JSON.stringify(errorJson);
+                  console.error("⚠️ Failed to register token with backend:", errorJson);
+                } catch {
+                  errorMessage = await registerResponse.text();
+                  console.error("⚠️ Failed to register token with backend:", errorMessage);
+                }
+                setError(`Transaction succeeded but registration failed: ${errorMessage}`);
               }
             } catch (registerError: any) {
               console.error("⚠️ Error registering token with backend:", registerError);
@@ -315,74 +410,180 @@ export function SubmitAPIForm() {
     );
   }
 
+  // Show loading while checking for existing server
+  if (checkingExisting) {
+    return (
+      <div className="submit-page">
+        <div className="connect-prompt">
+          <h2>🔍 Checking...</h2>
+          <p>Verifying if you already have an active server...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If builder already has a server (token), show message and redirect to dashboard
+  if (existingToken) {
+    return (
+      <div className="submit-page">
+        <div className="existing-token-notice">
+          <h2>🖥️ You Already Have an Active Server</h2>
+          <p>Each account can only register one server.</p>
+          
+          <div className="existing-token-info">
+            <div className="token-info-row">
+              <span className="label">Server Name:</span>
+              <span className="value">{existingToken.name}</span>
+            </div>
+            <div className="token-info-row">
+              <span className="label">Symbol:</span>
+              <span className="value">{existingToken.symbol}</span>
+            </div>
+            <div className="token-info-row">
+              <span className="label">Server Address:</span>
+              <span className="value">{existingToken.id}</span>
+            </div>
+            <div className="token-info-row">
+              <span className="label">APIs Registered:</span>
+              <span className="value">{existingToken.apiCount || existingToken.apis?.length || 1}</span>
+            </div>
+          </div>
+          
+          <p className="info-text">
+            Want to add more APIs? Go to your Dashboard to add APIs to your existing server.
+          </p>
+          
+          <div className="action-buttons">
+            <button 
+              className="btn btn-primary"
+              onClick={() => navigate("/dashboard")}
+            >
+              📊 Go to Dashboard
+            </button>
+            <button 
+              className="btn btn-secondary"
+              onClick={() => navigate(`/api/${existingToken.id}`)}
+            >
+              🔍 View Server Details
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="submit-page">
       <div className="submit-header">
-        <h1>➕ Submit Your API</h1>
-        <p>Create your API token and list it on the IAO Launchpad</p>
+        <h1>🖥️ Register Your Server</h1>
+        <p>Create your server and list your APIs on the IAO Launchpad</p>
         <div className="network-warning">
-          ⚠️ Requires Base mainnet. Switch networks in your wallet before submitting.
+          ⚠️ Requires Base Sepolia. Switch networks in your wallet before submitting.
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="submit-form">
         <div className="form-section">
-          <h3>Basic Information</h3>
+          <h3>Server Information</h3>
+          <p className="section-description">
+            This creates your server. You can register multiple APIs under this server.
+          </p>
           <div className="form-group">
-            <label htmlFor="name">API Name *</label>
+            <label htmlFor="name">Server Name *</label>
             <input
               id="name"
               name="name"
               type="text"
               value={formData.name}
               onChange={handleInputChange}
-              placeholder="My Awesome API"
+              placeholder="My API Server"
               required
               className="input"
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="symbol">API Symbol *</label>
+            <label htmlFor="symbol">Server Symbol *</label>
             <input
               id="symbol"
               name="symbol"
               type="text"
               value={formData.symbol}
               onChange={handleInputChange}
-              placeholder="MYAPI"
+              placeholder="MYSERVER"
               required
               maxLength={10}
               className="input"
             />
           </div>
+        </div>
 
-          <div className="form-group">
-            <label htmlFor="apiUrl">API Endpoint URL *</label>
-            <input
-              id="apiUrl"
-              name="apiUrl"
-              type="url"
-              value={formData.apiUrl}
-              onChange={handleInputChange}
-              placeholder="https://api.example.com/endpoint"
-              required
-              className="input"
-            />
-          </div>
+        <div className="form-section">
+          <h3>API Endpoints</h3>
+          <p className="section-description">
+            Register one or more APIs under your token. All APIs share the same subscription fee.
+          </p>
+          
+          {apis.map((api, index) => (
+            <div key={index} className="api-entry">
+              <div className="api-entry-header">
+                <span className="api-number">API #{index + 1}</span>
+                {apis.length > 1 && (
+                  <button 
+                    type="button" 
+                    className="btn btn-danger btn-small"
+                    onClick={() => removeApi(index)}
+                  >
+                    ✕ Remove
+                  </button>
+                )}
+              </div>
+              
+              <div className="form-group">
+                <label>API Name *</label>
+                <input
+                  type="text"
+                  value={api.name}
+                  onChange={(e) => handleApiChange(index, 'name', e.target.value)}
+                  placeholder="Pool Snapshot API"
+                  required
+                  className="input"
+                />
+              </div>
 
-          <div className="form-group">
-            <label htmlFor="description">Description (optional)</label>
-            <textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              placeholder="Describe what your API does..."
-              rows={4}
-              className="input textarea"
-            />
-          </div>
+              <div className="form-group">
+                <label>API Endpoint URL *</label>
+                <input
+                  type="url"
+                  value={api.apiUrl}
+                  onChange={(e) => handleApiChange(index, 'apiUrl', e.target.value)}
+                  placeholder="https://api.example.com/endpoint"
+                  required
+                  className="input"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Description *</label>
+                <textarea
+                  value={api.description}
+                  onChange={(e) => handleApiChange(index, 'description', e.target.value)}
+                  placeholder="Describe what this API does..."
+                  rows={2}
+                  className="input textarea"
+                  required
+                />
+              </div>
+            </div>
+          ))}
+          
+          <button 
+            type="button" 
+            className="btn btn-secondary"
+            onClick={addApi}
+          >
+            ➕ Add Another API
+          </button>
         </div>
 
         <div className="form-section">

@@ -23,7 +23,7 @@ function Navigation() {
           🏠 Discover
         </Link>
         <Link to="/submit" className={isActive("/submit") ? "active" : ""}>
-          ➕ Submit API
+          🖥️ Register Server
         </Link>
         <Link to="/dashboard" className={isActive("/dashboard") ? "active" : ""}>
           👤 Dashboard

@@ -196,55 +196,55 @@ export function DiscoverPage() {
     <div className="discover-page">
       <section className="discover-hero">
         <div className="hero-content">
-          <p className="eyebrow">Initial API Offering · Powered by x402</p>
-          <h1>Discover, pay, and earn with the next wave of on-chain APIs.</h1>
+          <p className="eyebrow">API Marketplace · Pay-per-call</p>
+          <h1>Monetize your APIs with crypto payments.</h1>
           <p className="hero-subtitle">
-            Developers list metered endpoints, testers pay via Coinbase CDP, and everyone earns IAO tokens for real usage.
+            Register your server, list your APIs, and get paid instantly in USDC for every call. No middleman, no delays.
           </p>
           <div className="hero-actions">
             <button className="btn btn-primary hero-btn" onClick={() => navigate("/submit")}>
-              ➕ List your API
+              🖥️ Register Server
             </button>
             <button
               className="btn btn-secondary hero-btn"
               onClick={() => navigate(`/api/${EXAMPLE_TOKEN_ADDRESS}`)}
             >
-              Explore sample API
+              Try Demo
             </button>
           </div>
         </div>
         <div className="hero-panel">
           <div className="hero-panel-content">
-            <p className="panel-label">Live payment flow</p>
-            <h3>Pay-per-call secured by facilitator</h3>
+            <p className="panel-label">How it works</p>
+            <h3>Simple pay-per-call model</h3>
             <ul>
-              <li>🔐 Wallet-signed USDC authorization</li>
-              <li>⚡ Facilitator settles instantly</li>
-              <li>🪙 Subgraph mints API tokens on success</li>
+              <li>🖥️ Register your server & list APIs</li>
+              <li>💰 Set your price per API call</li>
+              <li>⚡ Get paid instantly in USDC</li>
             </ul>
-            <p className="panel-footnote">No custodial keys. Users sign each transaction.</p>
+            <p className="panel-footnote">Secure wallet-based payments. No signup required.</p>
           </div>
         </div>
       </section>
 
       <section className="stats-section">
         <div className="stat-card">
-          <p className="stat-label">APIs live</p>
+          <p className="stat-label">Servers</p>
           <h3>{heroStats.totalApis}</h3>
-          <span className="stat-hint">Listed via token factory</span>
+          <span className="stat-hint">Active servers</span>
         </div>
         <div className="stat-card">
-          <p className="stat-label">Total subscriptions</p>
+          <p className="stat-label">API Calls</p>
           <h3>{formatCompactNumber(heroStats.totalSubscriptions)}</h3>
-          <span className="stat-hint">Usage tracked on subgraph</span>
+          <span className="stat-hint">Total paid calls</span>
         </div>
         <div className="stat-card">
-          <p className="stat-label">Cumulative volume</p>
+          <p className="stat-label">Volume</p>
           <h3>{formatCurrencyDisplay(heroStats.totalVolume)}</h3>
-          <span className="stat-hint">Settled in USDC via Coinbase CDP</span>
+          <span className="stat-hint">USDC transacted</span>
         </div>
         <div className="stat-card">
-          <p className="stat-label">Average ticket</p>
+          <p className="stat-label">Avg Price</p>
           <h3>{formatCurrencyDisplay(heroStats.avgPrice)}</h3>
           <span className="stat-hint">Per API call</span>
         </div>
@@ -308,7 +308,7 @@ export function DiscoverPage() {
         <section className="featured-section">
           <div className="featured-card">
             <div className="featured-content">
-              <p className="eyebrow">Featured API</p>
+              <p className="eyebrow">🔥 Featured Server</p>
               <h2>{featuredApi.name}</h2>
               <p className="featured-symbol">{featuredApi.symbol}</p>
               <div className="featured-stats">
@@ -317,23 +317,29 @@ export function DiscoverPage() {
                   <strong>{formatCurrencyDisplay(formatUSDC(featuredApi.subscriptionFee))}</strong>
                 </div>
                 <div>
-                  <span>Usage</span>
+                  <span>Calls</span>
                   <strong>{featuredApi.subscriptionCount || "0"}</strong>
+                </div>
+                <div>
+                  <span>APIs</span>
+                  <strong>{featuredApi.apiCount || featuredApi.apis?.length || 1}</strong>
                 </div>
               </div>
               <div className="featured-actions">
                 <button className="btn btn-primary" onClick={() => handleTryAPI(featuredApi.id)}>
-                  💳 Pay & Test
+                  ⚡ Try Now
                 </button>
                 <button className="btn ghost" onClick={() => handleViewDetails(featuredApi.id)}>
-                  View details
+                  View Details
                 </button>
               </div>
             </div>
             <div className="featured-meta">
-              <p><strong>Builder:</strong> {featuredApi.builder}</p>
-              <p><strong>Endpoint:</strong> {featuredApi.apiUrl}</p>
-              <p><strong>Token:</strong> {featuredApi.id}</p>
+              <p><strong>Owner:</strong> {featuredApi.builder.slice(0, 6)}...{featuredApi.builder.slice(-4)}</p>
+              <p><strong>Address:</strong> {featuredApi.id.slice(0, 6)}...{featuredApi.id.slice(-4)}</p>
+              {featuredApi.apis && featuredApi.apis.length > 0 && (
+                <p><strong>Endpoints:</strong> {featuredApi.apis.map(a => a.name).join(", ")}</p>
+              )}
             </div>
           </div>
         </section>

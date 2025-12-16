@@ -21,17 +21,6 @@ const formatFee = (fee: string) => {
   }
 };
 
-const formatTokenAmount = (amount: string) => {
-  const amountNum = Number(BigInt(amount)) / 1e18;
-  if (amountNum >= 1_000_000) {
-    return `${(amountNum / 1_000_000).toFixed(1)}M`;
-  }
-  if (amountNum >= 1_000) {
-    return `${(amountNum / 1_000).toFixed(1)}K`;
-  }
-  return amountNum.toFixed(0);
-};
-
 const tierLabels = (price: number) => {
   if (price < 0.05) return { label: "Starter", className: "starter" };
   if (price < 0.5) return { label: "Growth", className: "growth" };
@@ -44,6 +33,7 @@ export function APICard({ api, onViewDetails, onTryAPI, variant = "grid" }: APIC
   const isTrending = usageCount > 10;
   const tier = tierLabels(fee.value);
   const builderShort = `${api.builder.slice(0, 6)}...${api.builder.slice(-4)}`;
+  const apiCount = api.apiCount || api.apis?.length || 1;
 
   return (
     <div className={`api-card ${isTrending ? "trending" : ""} ${variant}`}>
@@ -67,6 +57,10 @@ export function APICard({ api, onViewDetails, onTryAPI, variant = "grid" }: APIC
           <div className="stat">
             <span className="stat-label">Usage</span>
             <span className="stat-value">{usageCount}</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">APIs</span>
+            <span className="stat-value">{apiCount}</span>
           </div>
         </div>
         <div className="api-address">
