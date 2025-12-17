@@ -17,6 +17,7 @@ export function APIDetailsPage() {
   const [metadataResult, setMetadataResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedApiSlug, setSelectedApiSlug] = useState<string | null>(null);
+  const [queryParams, setQueryParams] = useState<string>("");
 
   useEffect(() => {
     if (serverSlug) {
@@ -89,7 +90,13 @@ export function APIDetailsPage() {
 
     try {
       // Build URL with server slug and API slug
-      const url = buildProxyUrl(serverSlug, selectedApiSlug);
+      let url = buildProxyUrl(serverSlug, selectedApiSlug);
+      
+      // Append query parameters if provided
+      if (queryParams.trim()) {
+        const separator = url.includes("?") ? "&" : "?";
+        url = `${url}${separator}${queryParams.trim()}`;
+      }
 
       // Convert subscription fee to bigint
       const subscriptionFee = BigInt(server.subscriptionFee);
@@ -229,12 +236,23 @@ export function APIDetailsPage() {
           {selectedApi && (
             <div className="selected-api-info">
               <p><strong>Selected API:</strong> {selectedApi.name}</p>
-              <p className="api-url-preview"><code>/api/{server.slug}/{selectedApi.slug}</code></p>
+              <p className="api-url-preview"><code>/api/{server.slug}/{selectedApi.slug}{queryParams.trim() ? `?${queryParams.trim()}` : ''}</code></p>
               {selectedApi.description && <p className="api-desc">{selectedApi.description}</p>}
             </div>
           )}
           
           <div className="test-form">
+            <div className="form-group">
+              <label htmlFor="queryParams">Query Parameters (optional)</label>
+              <input
+                type="text"
+                id="queryParams"
+                placeholder="e.g., page=1&limit=10"
+                value={queryParams}
+                onChange={(e) => setQueryParams(e.target.value)}
+              />
+              <small className="form-hint">Add query string parameters to append to the API URL</small>
+            </div>
             <div className="button-group" style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
               <button
                 className="btn btn-secondary btn-large"
