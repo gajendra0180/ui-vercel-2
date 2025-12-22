@@ -1,11 +1,4 @@
-// TokenFactory contract ABI and utilities
-// Updated for per-API fee customization
-
-import { TOKEN_FACTORY_ADDRESS } from "../constants/addresses";
-export { TOKEN_FACTORY_ADDRESS };
-
-// Updated ABI - removed maxSubscriptionFee, updated CreateTokenParams
-export const TOKEN_FACTORY_ABI = [
+[
   {
     "type": "constructor",
     "inputs": [],
@@ -412,4 +405,4 @@ export const TOKEN_FACTORY_ABI = [
     "name": "ZeroPrice",
     "inputs": []
   }
-] as const;
+]

@@ -98,13 +98,17 @@ export function APIDetailsPage() {
         url = `${url}${separator}${queryParams.trim()}`;
       }
 
-      // Convert subscription fee to bigint
-      const subscriptionFee = BigInt(server.subscriptionFee);
+      // Get the selected API's fee
+      const api = server.apis?.find(a => a.slug === selectedApiSlug);
+      if (!api) {
+        throw new Error("Selected API not found");
+      }
+      const apiFee = BigInt(api.fee);
       
       // Call API with payment - user will be prompted to sign
       const data = await callAPIWithPayment(
         url,
-        subscriptionFee,
+        apiFee,
         server.id // receiver address (token address)
       );
 
@@ -163,12 +167,14 @@ export function APIDetailsPage() {
           <h1>🖥️ {server.name}</h1>
           <span className="api-symbol-badge">{server.symbol}</span>
         </div>
-        <div className="api-pricing">
-          <div className="price-badge">
-            <span className="price-label">Price per call</span>
-            <span className="price-value">{formatFee(server.subscriptionFee)}</span>
+        {selectedApi && (
+          <div className="api-pricing">
+            <div className="price-badge">
+              <span className="price-label">Selected API Price</span>
+              <span className="price-value">{formatFee(selectedApi.fee)}</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="api-info-section">
@@ -216,6 +222,7 @@ export function APIDetailsPage() {
                   <div className="api-item-header">
                     <span className="api-slug-badge">/{server.slug}/{apiItem.slug}</span>
                     <span className="api-name">{apiItem.name}</span>
+                    <span className="api-fee">{formatFee(apiItem.fee)}</span>
                     {selectedApiSlug === apiItem.slug && <span className="selected-badge">✓ Selected</span>}
                   </div>
                   {apiItem.description && (
@@ -236,6 +243,7 @@ export function APIDetailsPage() {
           {selectedApi && (
             <div className="selected-api-info">
               <p><strong>Selected API:</strong> {selectedApi.name}</p>
+              <p><strong>Price:</strong> {formatFee(selectedApi.fee)}</p>
               <p className="api-url-preview"><code>/api/{server.slug}/{selectedApi.slug}{queryParams.trim() ? `?${queryParams.trim()}` : ''}</code></p>
               {selectedApi.description && <p className="api-desc">{selectedApi.description}</p>}
             </div>
@@ -296,7 +304,7 @@ export function APIDetailsPage() {
               <h4>✅ Paid API Response</h4>
               <div className="result-info">
                 <p><strong>Payment Status:</strong> {apiResult.payment?.status || "paid"}</p>
-                <p><strong>Subscription Fee:</strong> {apiResult.payment?.subscriptionFee || server.subscriptionFee}</p>
+                <p><strong>Fee Paid:</strong> {selectedApi ? formatFee(selectedApi.fee) : 'N/A'}</p>
                 <p><strong>API Called:</strong> /{apiResult.proxy?.serverSlug || server.slug}/{apiResult.proxy?.apiSlug || selectedApiSlug}</p>
               </div>
               <div className="result-data">

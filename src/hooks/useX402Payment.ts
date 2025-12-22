@@ -16,7 +16,7 @@ export function useX402Payment() {
    */
   const callAPIWithPayment = async (
     apiUrl: string,
-    subscriptionFee: bigint,
+    fee: bigint,
     receiverAddress: string
   ): Promise<any> => {
     if (!account || !wallet) {
@@ -48,7 +48,7 @@ export function useX402Payment() {
         const network = paymentRequirements?.network ?? "base";
         const payTo = (paymentRequirements?.payTo ?? receiverAddress) as `0x${string}`;
         const paymentAsset = (paymentRequirements?.asset ?? USDC_ADDRESS) as `0x${string}`;
-        const amountValue = paymentRequirements?.maxAmountRequired ?? subscriptionFee.toString();
+        const amountValue = paymentRequirements?.maxAmountRequired ?? fee.toString();
         const x402Version = paymentInfo?.x402Version ?? 1;
 
         // Step 3: Generate EIP-3009 authorization parameters

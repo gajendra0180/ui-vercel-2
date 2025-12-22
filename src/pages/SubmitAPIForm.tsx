@@ -71,6 +71,7 @@ export function SubmitAPIForm() {
     name: string;
     apiUrl: string;
     description: string;
+    fee: string;  // Fee in USDC (e.g., "0.01")
     slugManuallyEdited?: boolean; // Track if user manually edited the slug
   }
 
@@ -78,12 +79,11 @@ export function SubmitAPIForm() {
     name: "",
     slug: "",
     symbol: "",
-    subscriptionFee: "",
   });
 
   // Support multiple APIs
   const [apis, setApis] = useState<FormApiEntry[]>([
-    { slug: "", name: "", apiUrl: "", description: "", slugManuallyEdited: false }
+    { slug: "", name: "", apiUrl: "", description: "", fee: "0.01", slugManuallyEdited: false }
   ]);
 
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +136,7 @@ export function SubmitAPIForm() {
   };
 
   const addApi = () => {
-    setApis([...apis, { slug: "", name: "", apiUrl: "", description: "", slugManuallyEdited: false }]);
+    setApis([...apis, { slug: "", name: "", apiUrl: "", description: "", fee: "0.01", slugManuallyEdited: false }]);
   };
 
   const removeApi = (index: number) => {
@@ -170,10 +170,6 @@ export function SubmitAPIForm() {
       setError("Server symbol is required");
       return false;
     }
-    if (!formData.subscriptionFee || parseFloat(formData.subscriptionFee) <= 0) {
-      setError("Subscription fee must be greater than 0");
-      return false;
-    }
     
     // Validate all APIs
     const apiSlugs = new Set<string>();
@@ -181,6 +177,10 @@ export function SubmitAPIForm() {
       const api = apis[i];
       if (!api.slug.trim()) {
         setError(`API #${i + 1}: Slug is required`);
+        return false;
+      }
+      if (!api.fee || parseFloat(api.fee) <= 0) {
+        setError(`API #${i + 1}: Fee must be greater than 0`);
         return false;
       }
       if (!isValidSlug(api.slug)) {
@@ -238,27 +238,15 @@ export function SubmitAPIForm() {
       setError(null);
       setSuccess(false);
 
-      // Convert subscription fee to smallest unit (USDC has 6 decimals)
-      const subscriptionFeeWei = parseUnits(formData.subscriptionFee, 6);
-
-      // Validate subscription fee is not zero
-      if (subscriptionFeeWei === 0n) {
-        setError("Subscription fee cannot be zero");
-        return;
-      }
-
-      // Note: Contract only supports single apiURL, we use the first API's URL
-      const primaryApiUrl = apis[0].apiUrl;
-      
       console.log("📝 Preparing transaction with params:", {
         name: formData.name,
         slug: formData.slug,
         symbol: formData.symbol,
-        apiURL: primaryApiUrl,
+        serverSlug: formData.slug,
         builder: account.address,
         paymentToken: USDC_ADDRESS,
-        subscriptionFee: subscriptionFeeWei.toString(),
         totalApis: apis.length,
+        apis: apis.map(api => ({ name: api.name, slug: api.slug, fee: api.fee })),
       });
 
       const tokenFactoryContract = getContract({
@@ -268,37 +256,61 @@ export function SubmitAPIForm() {
         abi: TOKEN_FACTORY_ABI,
       });
 
-      // Pre-check: Verify contract is not paused and subscription fee is within limits
+      // Pre-check: Verify contract is not paused
       try {
         console.log("🔍 Checking contract state...");
-        const [isPaused, maxSubscriptionFee] = await Promise.all([
-          readContract({
-            contract: tokenFactoryContract,
-            method: "paused",
-            params: [],
-          }),
-          readContract({
-            contract: tokenFactoryContract,
-            method: "maxSubscriptionFee",
-            params: [],
-          }),
-        ]);
+        const isPaused = await readContract({
+          contract: tokenFactoryContract,
+          method: "paused",
+          params: [],
+        });
 
-        console.log("Contract state:", { isPaused, maxSubscriptionFee: maxSubscriptionFee.toString() });
+        console.log("Contract state:", { isPaused });
 
         if (isPaused) {
           setError("Contract is currently paused. Token creation is disabled.");
           return;
         }
-
-        if (subscriptionFeeWei > maxSubscriptionFee) {
-          setError(
-            `Subscription fee (${formData.subscriptionFee} USDC) exceeds maximum allowed (${Number(maxSubscriptionFee) / 1e6} USDC)`
-          );
-          return;
-        }
       } catch (checkError: any) {
         console.warn("⚠️ Could not check contract state:", checkError);
+      }
+
+      // Pre-check: Validate registration data BEFORE signing transaction
+      // Call /api/register WITHOUT tokenAddress to validate before signing
+      try {
+        console.log("🔍 Validating registration data before transaction...");
+        const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        
+        const validationPayload = {
+          serverSlug: formData.slug.trim(),
+          builder: account.address.toLowerCase(),
+          apis: apis.map(api => ({
+            slug: api.slug.trim(),
+            apiUrl: api.apiUrl.trim(),
+            fee: parseUnits(api.fee, 6).toString(), // Convert to smallest unit
+          })),
+        };
+
+        const validationResponse = await fetch(`${baseUrl}/api/register`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(validationPayload),
+        });
+
+        if (!validationResponse.ok) {
+          const errorData = await validationResponse.json();
+          setError(errorData.message || errorData.error || "Validation failed");
+          return;
+        }
+
+        const validationResult = await validationResponse.json();
+        console.log("✅ Validation passed:", validationResult);
+      } catch (validationError: any) {
+        console.error("❌ Validation error:", validationError);
+        setError(`Validation failed: ${validationError.message || "Unable to validate registration data"}`);
+        return;
       }
 
       // Prepare contract call
@@ -309,10 +321,9 @@ export function SubmitAPIForm() {
           {
             name: formData.name.trim(),
             symbol: formData.symbol.trim(),
-            apiURL: primaryApiUrl.trim(),
+            serverSlug: formData.slug.trim(),
             builder: account.address,
             paymentToken: USDC_ADDRESS,
-            subscriptionFee: subscriptionFeeWei,
           },
         ],
       });
@@ -379,24 +390,24 @@ export function SubmitAPIForm() {
             try {
               const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
               
-              // Format APIs for backend with slugs
+              // Format APIs for backend with slugs and fees
               const formattedApis = apis.map(api => ({
                 slug: api.slug.toLowerCase().trim(),
                 name: api.name.trim(),
                 apiUrl: api.apiUrl.trim(),
                 description: api.description.trim(),
+                fee: parseUnits(api.fee, 6).toString(), // Convert to smallest unit
               }));
               
               // Build registration payload with slugs
               const registerPayload = {
                 tokenAddress: tokenAddress.toLowerCase(),
-                slug: formData.slug.toLowerCase().trim(),
+                serverSlug: formData.slug.toLowerCase().trim(),
                 name: formData.name.trim(),
                 symbol: formData.symbol.trim(),
                 apis: formattedApis,
                 builder: account.address.toLowerCase(),
                 paymentToken: USDC_ADDRESS.toLowerCase(),
-                subscriptionFee: subscriptionFeeWei.toString(),
               };
               
               console.log("📝 Registering server with backend:", registerPayload);
@@ -611,7 +622,7 @@ export function SubmitAPIForm() {
         <div className="form-section">
           <h3>API Endpoints</h3>
           <p className="section-description">
-            Register one or more APIs under your server. All APIs share the same subscription fee.
+            Register one or more APIs under your server. Each API can have its own custom fee.
           </p>
           
           {apis.map((api, index) => (
@@ -681,6 +692,21 @@ export function SubmitAPIForm() {
                   required
                 />
               </div>
+
+              <div className="form-group">
+                <label>Fee (USDC) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={api.fee}
+                  onChange={(e) => handleApiChange(index, 'fee', e.target.value)}
+                  placeholder="0.01"
+                  required
+                  className="input"
+                />
+                <small>Amount users pay per call to this API (in USDC)</small>
+              </div>
             </div>
           ))}
           
@@ -693,25 +719,6 @@ export function SubmitAPIForm() {
           </button>
         </div>
 
-        <div className="form-section">
-          <h3>Pricing & Rewards</h3>
-          <div className="form-group">
-            <label htmlFor="subscriptionFee">Subscription Fee (USDC) *</label>
-            <input
-              id="subscriptionFee"
-              name="subscriptionFee"
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={formData.subscriptionFee}
-              onChange={handleInputChange}
-              placeholder="0.01"
-              required
-              className="input"
-            />
-            <small>Amount users pay per API call (in USDC)</small>
-          </div>
-        </div>
 
         {error && (
           <div className="error-box">

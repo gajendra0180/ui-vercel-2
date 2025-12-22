@@ -28,12 +28,28 @@ const tierLabels = (price: number) => {
 };
 
 export function APICard({ server, onViewDetails, onTryServer, variant = "grid" }: APICardProps) {
-  const fee = formatFee(server.subscriptionFee);
   const usageCount = server.subscriptionCount ? parseInt(server.subscriptionCount) : 0;
   const isTrending = usageCount > 10;
-  const tier = tierLabels(fee.value);
   const builderShort = `${server.builder.slice(0, 6)}...${server.builder.slice(-4)}`;
   const apiCount = server.apiCount || server.apis?.length || 0;
+  
+  // Calculate price range from APIs
+  let priceDisplay = "$0.00";
+  let tierInfo = { label: "Starter", className: "starter" };
+  if (server.apis && server.apis.length > 0) {
+    const fees = server.apis.map(api => {
+      const fee = formatFee(api.fee);
+      return fee.value;
+    });
+    const minFee = Math.min(...fees);
+    const maxFee = Math.max(...fees);
+    if (minFee === maxFee) {
+      priceDisplay = `$${minFee.toFixed(2)}`;
+    } else {
+      priceDisplay = `$${minFee.toFixed(2)}-$${maxFee.toFixed(2)}`;
+    }
+    tierInfo = tierLabels(minFee);
+  }
 
   return (
     <div className={`api-card ${isTrending ? "trending" : ""} ${variant}`}>
@@ -41,7 +57,7 @@ export function APICard({ server, onViewDetails, onTryServer, variant = "grid" }
       <div className="api-card-header">
         <div>
           <div className="api-meta">
-            <span className={`tier-pill ${tier.className}`}>{tier.label}</span>
+            <span className={`tier-pill ${tierInfo.className}`}>{tierInfo.label}</span>
             <span className="builder-pill">by {builderShort}</span>
           </div>
           <h3>{server.name}</h3>
@@ -53,7 +69,7 @@ export function APICard({ server, onViewDetails, onTryServer, variant = "grid" }
         <div className="api-stats">
           <div className="stat">
             <span className="stat-label">Price</span>
-            <span className="stat-value">{fee.label}</span>
+            <span className="stat-value">{priceDisplay}</span>
           </div>
           <div className="stat">
             <span className="stat-label">Usage</span>

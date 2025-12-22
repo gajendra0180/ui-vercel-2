@@ -75,10 +75,15 @@ export function DiscoverPage() {
     const totals = servers.reduce(
       (acc, server) => {
         const subscriptions = Number(server.subscriptionCount || "0");
-        const price = formatUSDC(server.subscriptionFee);
+        // Calculate average price from all APIs
+        let avgServerPrice = 0;
+        if (server.apis && server.apis.length > 0) {
+          const totalPrice = server.apis.reduce((sum, api) => sum + formatUSDC(api.fee), 0);
+          avgServerPrice = totalPrice / server.apis.length;
+        }
         acc.totalSubscriptions += subscriptions;
-        acc.totalVolume += subscriptions * price;
-        acc.totalPrice += price;
+        acc.totalVolume += subscriptions * avgServerPrice;
+        acc.totalPrice += avgServerPrice;
         return acc;
       },
       { totalSubscriptions: 0, totalVolume: 0, totalPrice: 0 }
@@ -88,7 +93,7 @@ export function DiscoverPage() {
       totalServers: servers.length,
       totalSubscriptions: totals.totalSubscriptions,
       totalVolume: totals.totalVolume,
-      avgPrice: totals.totalPrice / servers.length,
+      avgPrice: servers.length > 0 ? totals.totalPrice / servers.length : 0,
     };
   }, [servers]);
 
@@ -125,8 +130,12 @@ export function DiscoverPage() {
     if (priceFilter !== "all") {
       const tier = PRICE_TIER_META[priceFilter];
       filtered = filtered.filter((server) => {
-        const price = formatUSDC(server.subscriptionFee);
-        return price >= tier.min && price <= tier.max;
+        if (!server.apis || server.apis.length === 0) return false;
+        // Check if any API falls within the price range
+        return server.apis.some(api => {
+          const price = formatUSDC(api.fee);
+          return price >= tier.min && price <= tier.max;
+        });
       });
     }
 
@@ -144,9 +153,23 @@ export function DiscoverPage() {
           }
           return b.id.localeCompare(a.id);
         case "price-low":
-          return formatUSDC(a.subscriptionFee) - formatUSDC(b.subscriptionFee);
+          // Sort by minimum API price
+          const aMinPrice = a.apis && a.apis.length > 0 
+            ? Math.min(...a.apis.map(api => formatUSDC(api.fee))) 
+            : 0;
+          const bMinPrice = b.apis && b.apis.length > 0 
+            ? Math.min(...b.apis.map(api => formatUSDC(api.fee))) 
+            : 0;
+          return aMinPrice - bMinPrice;
         case "price-high":
-          return formatUSDC(b.subscriptionFee) - formatUSDC(a.subscriptionFee);
+          // Sort by maximum API price
+          const aMaxPrice = a.apis && a.apis.length > 0 
+            ? Math.max(...a.apis.map(api => formatUSDC(api.fee))) 
+            : 0;
+          const bMaxPrice = b.apis && b.apis.length > 0 
+            ? Math.max(...b.apis.map(api => formatUSDC(api.fee))) 
+            : 0;
+          return bMaxPrice - aMaxPrice;
         default:
           return 0;
       }
@@ -309,8 +332,18 @@ export function DiscoverPage() {
               </p>
               <div className="featured-stats">
                 <div>
-                  <span>Price</span>
-                  <strong>{formatCurrencyDisplay(formatUSDC(featuredServer.subscriptionFee))}</strong>
+                  <span>Price Range</span>
+                  <strong>
+                    {featuredServer.apis && featuredServer.apis.length > 0 ? (() => {
+                      const fees = featuredServer.apis.map(api => formatUSDC(api.fee));
+                      const minFee = Math.min(...fees);
+                      const maxFee = Math.max(...fees);
+                      if (minFee === maxFee) {
+                        return formatCurrencyDisplay(minFee);
+                      }
+                      return `${formatCurrencyDisplay(minFee)}-${formatCurrencyDisplay(maxFee)}`;
+                    })() : '$0.00'}
+                  </strong>
                 </div>
                 <div>
                   <span>Calls</span>

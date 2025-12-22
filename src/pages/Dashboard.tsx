@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useActiveAccount } from "thirdweb/react";
+import { parseUnits } from "viem";
 import { getAllServers, addApiToServer, ServerEntry } from "../utils/api";
 import "./Dashboard.css";
 
@@ -30,6 +31,7 @@ export function Dashboard() {
   const [newApiName, setNewApiName] = useState("");
   const [newApiUrl, setNewApiUrl] = useState("");
   const [newApiDescription, setNewApiDescription] = useState("");
+  const [newApiFee, setNewApiFee] = useState("0.01");
   const [addingApi, setAddingApi] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addSuccess, setAddSuccess] = useState(false);
@@ -118,6 +120,12 @@ export function Dashboard() {
       setAddError("Description is required");
       return;
     }
+    // Validate fee
+    const feeNum = parseFloat(newApiFee);
+    if (isNaN(feeNum) || feeNum <= 0) {
+      setAddError("Fee must be a positive number");
+      return;
+    }
 
     setAddingApi(true);
     setAddError(null);
@@ -130,6 +138,7 @@ export function Dashboard() {
         name: newApiName.trim(),
         apiUrl: newApiUrl.trim(),
         description: newApiDescription.trim(),
+        fee: parseUnits(newApiFee, 6).toString(), // Convert to smallest unit (6 decimals for USDC)
         builder: account.address,
       });
 
@@ -139,6 +148,7 @@ export function Dashboard() {
         setNewApiName("");
         setNewApiUrl("");
         setNewApiDescription("");
+        setNewApiFee("0.01"); // Reset to default
         setSlugManuallyEdited(false); // Reset for next API
         setShowAddForm(false);
         // Reload server data
@@ -193,10 +203,6 @@ export function Dashboard() {
                 </div>
                 <div className="server-slug-display">/{myServer.slug}</div>
                 <div className="token-stats">
-                  <div className="stat">
-                    <span className="stat-value">{formatFee(myServer.subscriptionFee)}</span>
-                    <span className="stat-label">per call</span>
-                  </div>
                   <div className="stat">
                     <span className="stat-value">{myServer.subscriptionCount || "0"}</span>
                     <span className="stat-label">total usage</span>
@@ -277,6 +283,20 @@ export function Dashboard() {
                     className="input textarea"
                   />
                 </div>
+                <div className="form-group">
+                  <label>Fee (USDC) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={newApiFee}
+                    onChange={(e) => setNewApiFee(e.target.value)}
+                    placeholder="0.01"
+                    className="input"
+                    required
+                  />
+                  <small>Amount users pay per call to this API (in USDC)</small>
+                </div>
                 {addError && <div className="error-box">❌ {addError}</div>}
                 {addSuccess && <div className="success-box">✅ API added successfully!</div>}
                 <button 
@@ -297,6 +317,7 @@ export function Dashboard() {
                     <div className="api-card-header">
                       <code className="api-slug-badge">/{myServer.slug}/{api.slug}</code>
                       <h4>{api.name}</h4>
+                      <span className="api-fee-badge">{formatFee(api.fee)}</span>
                     </div>
                     {api.description && (
                       <p className="api-description">{api.description}</p>

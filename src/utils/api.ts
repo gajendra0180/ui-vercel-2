@@ -12,6 +12,7 @@ export interface ApiEntry {
   slug: string;         // Unique slug within the server (e.g., "eigenpie-pool")
   name: string;         // API name
   description: string;  // Description (required)
+  fee: string;          // Fee in payment token smallest unit (e.g., "10000" = $0.01 USDC)
   createdAt: string;    // ISO timestamp
   // Note: apiUrl is NOT included - hidden from frontend for security
 }
@@ -26,10 +27,9 @@ export interface ServerEntry {
   builder: string;               // Builder address
   name: string;                  // Server name
   symbol: string;                // Token symbol
-  subscriptionFee: string;       // Fee for all APIs under this server
   paymentToken: string;          // Payment token address
   subscriptionCount?: string;    // Total usage count (aggregated across all APIs)
-  apis?: ApiEntry[];             // Array of registered APIs
+  apis?: ApiEntry[];             // Array of registered APIs (each with own fee)
   apiCount?: number;             // Number of APIs
   createdAt?: string;            // Creation timestamp
   updatedAt?: string;            // Last update timestamp
@@ -124,10 +124,9 @@ export async function registerServer(serverData: {
   slug: string;                  // Server slug (e.g., "magpie")
   name: string;
   symbol: string;
-  apis: { slug: string; name: string; apiUrl: string; description: string }[];
+  apis: { slug: string; name: string; apiUrl: string; description: string; fee: string }[];
   builder: string;
   paymentToken: string;
-  subscriptionFee: string;
 }): Promise<{ success: boolean; server?: ServerEntry; error?: string }> {
   try {
     const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
@@ -164,6 +163,7 @@ export async function addApiToServer(data: {
   name: string;
   apiUrl: string;
   description: string;
+  fee: string;          // Fee in payment token smallest unit (e.g., "10000" = $0.01 USDC)
   builder: string;
 }): Promise<{ success: boolean; api?: ApiEntry; error?: string }> {
   try {
