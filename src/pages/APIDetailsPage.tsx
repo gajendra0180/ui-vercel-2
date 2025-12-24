@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ServerEntry, getServerBySlug, buildProxyUrl } from "../utils/api";
+import { ServerEntry, getServerBySlug, buildProxyUrl, getServerMetrics, ServerMetrics } from "../utils/api";
 import { useX402Payment } from "../hooks/useX402Payment";
 import "./APIDetailsPage.css";
 
@@ -18,12 +18,28 @@ export function APIDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedApiSlug, setSelectedApiSlug] = useState<string | null>(null);
   const [queryParams, setQueryParams] = useState<string>("");
+  const [metrics, setMetrics] = useState<ServerMetrics | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
 
   useEffect(() => {
     if (serverSlug) {
       loadServerDetails();
+      loadMetrics();
     }
   }, [serverSlug]);
+
+  const loadMetrics = async () => {
+    if (!serverSlug) return;
+    try {
+      setMetricsLoading(true);
+      const metricsData = await getServerMetrics(serverSlug);
+      setMetrics(metricsData);
+    } catch (err: any) {
+      console.error("Failed to load metrics:", err);
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
 
   const loadServerDetails = async () => {
     if (!serverSlug) return;
@@ -178,6 +194,73 @@ export function APIDetailsPage() {
       </div>
 
       <div className="api-info-section">
+        {/* Metrics Section */}
+        {metrics && (
+          <div className="info-card metrics-card">
+            <h3>📊 Metrics & Insights</h3>
+            <p className="metrics-note">📈 Metrics calculated from last 100 API calls</p>
+            {metrics.server && (
+              <div className="metrics-grid">
+                <div className="metric-item">
+                  <span className="metric-label">Total API Calls</span>
+                  <span className="metric-value">{parseInt(metrics.server.totalCalls || "0").toLocaleString()}</span>
+                </div>
+                <div className="metric-item">
+                  <span className="metric-label">Total USDC Paid</span>
+                  <span className="metric-value">${metrics.server.totalRevenueUSD.toFixed(2)}</span>
+                </div>
+                <div className="metric-item">
+                  <span className="metric-label">Average Latency</span>
+                  <span className="metric-value">{metrics.server.averageLatency.toFixed(0)}ms</span>
+                </div>
+                <div className="metric-item">
+                  <span className="metric-label">P95 Latency</span>
+                  <span className="metric-value">{metrics.server.p95Latency.toFixed(0)}ms</span>
+                </div>
+                <div className="metric-item">
+                  <span className="metric-label">Success Rate</span>
+                  <span className="metric-value">{metrics.server.successRate.toFixed(1)}%</span>
+                </div>
+              </div>
+            )}
+            {metrics.contract && (
+              <div className="contract-metrics">
+                <h4>🎯 Token Bonding Progress</h4>
+                <div className="bonding-progress">
+                  <div className="progress-bar-container">
+                    <div 
+                      className="progress-bar" 
+                      style={{ width: `${Math.min(metrics.contract.bondingProgress, 100)}%` }}
+                    />
+                  </div>
+                  <div className="progress-info">
+                    <span>{metrics.contract.bondingProgress.toFixed(2)}%</span>
+                    <span className="progress-details">
+                      {parseFloat(metrics.contract.totalTokensDistributed).toLocaleString()} / {parseFloat(metrics.contract.graduationThreshold).toLocaleString()} tokens
+                    </span>
+                  </div>
+                </div>
+                {metrics.contract.isGraduated && metrics.contract.uniswapLink && (
+                  <div className="uniswap-link">
+                    <a 
+                      href={metrics.contract.uniswapLink} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      title="View token pool on Uniswap (opens in new tab)"
+                    >
+                      🔗 View Pool on Uniswap
+                    </a>
+                  </div>
+                )}
+                {metrics.contract.error && (
+                  <div className="metrics-error">⚠️ {metrics.contract.error}</div>
+                )}
+              </div>
+            )}
+            {metricsLoading && <div className="metrics-loading">Loading metrics...</div>}
+          </div>
+        )}
+
         <div className="info-card">
           <h3>📋 Server Information</h3>
           <div className="info-grid">

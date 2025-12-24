@@ -62,6 +62,18 @@ export function APICard({ server, onViewDetails, onTryServer, variant = "grid" }
           </div>
           <h3>{server.name}</h3>
           <span className="server-slug">/{server.slug}</span>
+          {server.tags && server.tags.length > 0 && (
+            <div className="tag-badges">
+              {server.tags.slice(0, 3).map((tag) => (
+                <span key={tag} className="tag-badge">
+                  {tag}
+                </span>
+              ))}
+              {server.tags.length > 3 && (
+                <span className="tag-badge more-tags">+{server.tags.length - 3}</span>
+              )}
+            </div>
+          )}
         </div>
         <span className="api-symbol">{server.symbol}</span>
       </div>

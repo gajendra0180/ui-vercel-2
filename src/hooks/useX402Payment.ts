@@ -12,7 +12,7 @@ export function useX402Payment() {
 
   /**
    * Make a payment-protected API call
-   * Flow: Get 402 -> Sign EIP-3009 authorization -> Facilitator processes payment -> Send authorization in X-PAYMENT header
+   * Flow: Get 402 -> Sign EIP-3009 authorization -> Facilitator processes payment -> Send authorization in PAYMENT-SIGNATURE header (x402 V2)
    */
   const callAPIWithPayment = async (
     apiUrl: string,
@@ -177,20 +177,23 @@ export function useX402Payment() {
           },
         });
 
-        // Step 6: Wait a moment for facilitator to process payment, then retry with X-PAYMENT header
+        // Step 6: Wait a moment for facilitator to process payment, then retry with payment header
         // The facilitator uses the authorization we just signed to process the payment on-chain
         console.log("Waiting for facilitator to process payment...");
         await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds for facilitator
 
-        // Step 7: Retry API call with X-PAYMENT header containing the authorization
+        // Step 7: Retry API call with payment header (V2: PAYMENT-SIGNATURE, V1: X-PAYMENT)
         const paymentProofJson = JSON.stringify(paymentProof);
         const paymentProofBase64 = btoa(unescape(encodeURIComponent(paymentProofJson)));
+        
+        // Use V2 header if version is 2, otherwise fallback to V1 for backward compatibility
+        const paymentHeaderName = x402Version === 2 ? "PAYMENT-SIGNATURE" : "X-PAYMENT";
         
         const response = await fetch(apiUrl, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
-            "X-PAYMENT": paymentProofBase64,
+            [paymentHeaderName]: paymentProofBase64,
           },
         });
 

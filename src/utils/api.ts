@@ -29,6 +29,7 @@ export interface ServerEntry {
   symbol: string;                // Token symbol
   paymentToken: string;          // Payment token address
   subscriptionCount?: string;    // Total usage count (aggregated across all APIs)
+  tags?: string[];               // Array of category tags
   apis?: ApiEntry[];             // Array of registered APIs (each with own fee)
   apiCount?: number;             // Number of APIs
   createdAt?: string;            // Creation timestamp
@@ -229,4 +230,110 @@ export async function checkServerSlugExists(slug: string): Promise<boolean> {
 export function buildProxyUrl(serverSlug: string, apiSlug: string): string {
   const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
   return `${baseUrl}/api/${serverSlug}/${apiSlug}`;
+}
+
+/**
+ * Server metrics interface
+ */
+export interface ServerMetrics {
+  server: {
+    totalCalls: string;
+    totalRevenue: string; // Total USDC paid to contract
+    totalRevenueUSD: number; // Total USDC paid to contract (USD)
+    averageLatency: number;
+    p95Latency: number;
+    successRate: number;
+    apiCount: number;
+    perApiMetrics: {
+      apiSlug: string;
+      callCount: string;
+      revenue: string; // USDC paid to contract
+      revenueUSD: number; // USDC paid to contract (USD)
+      averageLatency: number;
+      p95Latency: number;
+      successRate: number;
+    }[];
+  } | null;
+  contract: {
+    tokenAddress: string;
+    graduationThreshold: string;
+    totalTokensDistributed: string;
+    totalFeesCollected: string;
+    bondingProgress: number;
+    isGraduated: boolean;
+    uniswapLink?: string;
+    error?: string;
+  } | null;
+}
+
+/**
+ * API metrics interface
+ */
+export interface ApiMetrics {
+  api: {
+    id: string;
+    tokenAddress: string;
+    apiSlug: string;
+    callCount: string;
+    totalRevenue: string;
+    successCount: string;
+    failureCount: string;
+    totalLatency: string;
+    averageLatency: string;
+    lastCallAt: string;
+  } | null;
+}
+
+/**
+ * Get server metrics
+ */
+export async function getServerMetrics(serverSlug: string): Promise<ServerMetrics | null> {
+  try {
+    const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    const response = await fetch(`${baseUrl}/api/metrics/${serverSlug}`);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`Failed to fetch metrics: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.success && data.metrics) {
+      return data.metrics;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error fetching server metrics:", error);
+    return null;
+  }
+}
+
+/**
+ * Get API-specific metrics
+ */
+export async function getApiMetrics(serverSlug: string, apiSlug: string): Promise<ApiMetrics | null> {
+  try {
+    const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    const response = await fetch(`${baseUrl}/api/metrics/${serverSlug}/${apiSlug}`);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error(`Failed to fetch API metrics: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.success && data.metrics) {
+      return data.metrics;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error fetching API metrics:", error);
+    return null;
+  }
 }

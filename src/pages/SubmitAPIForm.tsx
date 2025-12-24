@@ -19,6 +19,37 @@ function isValidSlug(slug: string): boolean {
   return /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(slug);
 }
 
+// Valid category tags
+const VALID_CATEGORIES = [
+  'crypto',
+  'blockchain',
+  'ai',
+  'ml',
+  'trading',
+  'data',
+  'analytics',
+  'infrastructure',
+  'social',
+  'media',
+  'finance',
+  'gaming',
+] as const;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  crypto: 'Crypto',
+  blockchain: 'Blockchain',
+  ai: 'AI',
+  ml: 'ML',
+  trading: 'Trading',
+  data: 'Data',
+  analytics: 'Analytics',
+  infrastructure: 'Infrastructure',
+  social: 'Social',
+  media: 'Media',
+  finance: 'Finance',
+  gaming: 'Gaming',
+};
+
 // Generate slug suggestion from name
 function generateSlugFromName(name: string): string {
   return name
@@ -79,6 +110,7 @@ export function SubmitAPIForm() {
     name: "",
     slug: "",
     symbol: "",
+    tags: [] as string[],
   });
 
   // Support multiple APIs
@@ -112,6 +144,17 @@ export function SubmitAPIForm() {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
     setError(null);
+  };
+
+  const handleTagToggle = (tag: string) => {
+    setFormData((prev) => {
+      const currentTags = prev.tags || [];
+      if (currentTags.includes(tag)) {
+        return { ...prev, tags: currentTags.filter(t => t !== tag) };
+      } else {
+        return { ...prev, tags: [...currentTags, tag] };
+      }
+    });
   };
 
   const handleApiChange = (index: number, field: keyof FormApiEntry, value: string) => {
@@ -284,6 +327,7 @@ export function SubmitAPIForm() {
         const validationPayload = {
           serverSlug: formData.slug.trim(),
           builder: account.address.toLowerCase(),
+          tags: formData.tags.length > 0 ? formData.tags : undefined,
           apis: apis.map(api => ({
             slug: api.slug.trim(),
             apiUrl: api.apiUrl.trim(),
@@ -405,6 +449,7 @@ export function SubmitAPIForm() {
                 serverSlug: formData.slug.toLowerCase().trim(),
                 name: formData.name.trim(),
                 symbol: formData.symbol.trim(),
+                tags: formData.tags.length > 0 ? formData.tags : undefined,
                 apis: formattedApis,
                 builder: account.address.toLowerCase(),
                 paymentToken: USDC_ADDRESS.toLowerCase(),
@@ -616,6 +661,25 @@ export function SubmitAPIForm() {
               maxLength={10}
               className="input"
             />
+          </div>
+
+          <div className="form-group">
+            <label>Categories (Optional)</label>
+            <p className="section-description" style={{ marginTop: 0, marginBottom: '12px' }}>
+              Select one or more categories to help users discover your server
+            </p>
+            <div className="tag-selection">
+              {VALID_CATEGORIES.map((tag) => (
+                <label key={tag} className="tag-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={formData.tags.includes(tag)}
+                    onChange={() => handleTagToggle(tag)}
+                  />
+                  <span className="tag-label">{CATEGORY_LABELS[tag]}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
 

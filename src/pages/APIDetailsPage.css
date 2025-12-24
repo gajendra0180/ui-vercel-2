@@ -481,3 +481,116 @@
     padding: 16px;
   }
 }
+
+/* ===== Metrics Styles ===== */
+.metrics-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.metrics-card h3 {
+  color: white;
+  margin-bottom: 20px;
+}
+
+.metrics-note {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin: -8px 0 16px 0;
+  font-style: italic;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metric-label {
+  font-size: 0.875rem;
+  opacity: 0.9;
+}
+
+.metric-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.contract-metrics {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.contract-metrics h4 {
+  color: white;
+  margin-bottom: 16px;
+}
+
+.bonding-progress {
+  margin-bottom: 16px;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
+  transition: width 0.3s ease;
+  border-radius: 12px;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  opacity: 0.9;
+}
+
+.progress-details {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.uniswap-link {
+  margin-top: 12px;
+}
+
+.uniswap-link a {
+  color: white;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.uniswap-link a:hover {
+  opacity: 0.8;
+}
+
+.metrics-loading {
+  text-align: center;
+  padding: 20px;
+  opacity: 0.8;
+}
+
+.metrics-error {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+  font-size: 0.875rem;
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAllServers, ServerEntry } from "../utils/api";
 import { APICard } from "../components/APICard";
@@ -7,6 +7,67 @@ import "./DiscoverPage.css";
 type SortOption = "trending" | "newest" | "price-low" | "price-high";
 type PriceTier = "all" | "starter" | "growth" | "pro";
 type ViewMode = "grid" | "list";
+
+// Valid category tags
+const VALID_CATEGORIES = [
+  'crypto',
+  'blockchain',
+  'ai',
+  'ml',
+  'trading',
+  'data',
+  'analytics',
+  'infrastructure',
+  'social',
+  'media',
+  'finance',
+  'gaming',
+] as const;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  crypto: 'Crypto',
+  blockchain: 'Blockchain',
+  ai: 'AI',
+  ml: 'ML',
+  trading: 'Trading',
+  data: 'Data',
+  analytics: 'Analytics',
+  infrastructure: 'Infrastructure',
+  social: 'Social',
+  media: 'Media',
+  finance: 'Finance',
+  gaming: 'Gaming',
+};
+
+const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+  crypto: 'Servers that provide resources for crypto operations',
+  blockchain: 'Servers that provide blockchain and on-chain data',
+  ai: 'Servers that provide AI resources',
+  ml: 'Servers that provide machine learning capabilities',
+  trading: 'Servers that provide resources for trading information',
+  data: 'Servers that provide data aggregation and processing',
+  analytics: 'Servers that provide analytics and insights',
+  infrastructure: 'Servers that provide infrastructure services',
+  social: 'Servers that provide social media and networking APIs',
+  media: 'Servers that provide media processing and content APIs',
+  finance: 'Servers that provide financial data and services',
+  gaming: 'Servers that provide gaming-related APIs',
+};
+
+const CATEGORY_ICONS: Record<string, string> = {
+  crypto: '⛓️',
+  blockchain: '🔗',
+  ai: '🧠',
+  ml: '🤖',
+  trading: '📈',
+  data: '📊',
+  analytics: '📉',
+  infrastructure: '⚙️',
+  social: '👥',
+  media: '🎬',
+  finance: '💰',
+  gaming: '🎮',
+};
 
 const PRICE_TIER_META: Record<Exclude<PriceTier, "all">, { label: string; description: string; min: number; max: number }> = {
   starter: {
@@ -52,6 +113,7 @@ export function DiscoverPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("trending");
   const [priceFilter, setPriceFilter] = useState<PriceTier>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
   useEffect(() => {
@@ -60,7 +122,7 @@ export function DiscoverPage() {
 
   useEffect(() => {
     filterAndSortServers();
-  }, [servers, searchQuery, sortBy, priceFilter]);
+  }, [servers, searchQuery, sortBy, priceFilter, selectedCategory]);
 
   const heroStats = useMemo(() => {
     if (!servers.length) {
@@ -100,6 +162,19 @@ export function DiscoverPage() {
   const featuredServer = filteredServers[0] || null;
   const remainingServers = featuredServer ? filteredServers.slice(1) : filteredServers;
 
+  // Group servers by category for "All Categories" view
+  const serversByCategory = useMemo(() => {
+    if (selectedCategory !== "all") return {};
+    
+    const grouped: Record<string, ServerEntry[]> = {};
+    VALID_CATEGORIES.forEach(category => {
+      grouped[category] = servers.filter(server => 
+        (server.tags || []).includes(category)
+      );
+    });
+    return grouped;
+  }, [servers, selectedCategory]);
+
   const loadServers = async () => {
     try {
       setLoading(true);
@@ -125,6 +200,13 @@ export function DiscoverPage() {
           server.slug?.toLowerCase().includes(query) ||
           server.id.toLowerCase().includes(query)
       );
+    }
+
+    // Filter by category
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter((server) => {
+        return (server.tags || []).includes(selectedCategory);
+      });
     }
 
     if (priceFilter !== "all") {
@@ -306,18 +388,43 @@ export function DiscoverPage() {
         </div>
       </section>
 
-      <div className="price-pills">
-        {(["all", "starter", "growth", "pro"] as PriceTier[]).map((tier) => (
-          <button
-            key={tier}
-            className={`pill ${priceFilter === tier ? "active" : ""}`}
-            onClick={() => setPriceFilter(tier)}
-          >
-            {tier === "all"
-              ? "All tiers"
-              : `${PRICE_TIER_META[tier].label} · ${PRICE_TIER_META[tier].description}`}
-          </button>
-        ))}
+      <div className="filter-section">
+        <div className="category-filters">
+          <h4>Categories</h4>
+          <div className="category-pills">
+            <button
+              className={`pill ${selectedCategory === "all" ? "active" : ""}`}
+              onClick={() => setSelectedCategory("all")}
+            >
+              All Categories
+            </button>
+            {VALID_CATEGORIES.map((category) => (
+              <button
+                key={category}
+                className={`pill ${selectedCategory === category ? "active" : ""}`}
+                onClick={() => setSelectedCategory(category)}
+              >
+                {CATEGORY_LABELS[category]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="price-pills">
+          <h4>Price Tiers</h4>
+          <div className="pills-row">
+            {(["all", "starter", "growth", "pro"] as PriceTier[]).map((tier) => (
+              <button
+                key={tier}
+                className={`pill ${priceFilter === tier ? "active" : ""}`}
+                onClick={() => setPriceFilter(tier)}
+              >
+                {tier === "all"
+                  ? "All tiers"
+                  : `${PRICE_TIER_META[tier].label} · ${PRICE_TIER_META[tier].description}`}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {featuredServer && (
@@ -382,10 +489,28 @@ export function DiscoverPage() {
         </section>
       )}
 
-      {filteredServers.length === 0 ? (
+      {/* Show categorical sections when "All Categories" is selected */}
+      {selectedCategory === "all" && !searchQuery && priceFilter === "all" ? (
+        <div className="category-sections">
+          {VALID_CATEGORIES.map((category) => {
+            const categoryServers = serversByCategory[category] || [];
+            if (categoryServers.length === 0) return null;
+            
+            return (
+              <CategorySection
+                key={category}
+                category={category}
+                servers={categoryServers}
+                onViewDetails={handleViewDetails}
+                onTryServer={handleTryServer}
+              />
+            );
+          })}
+        </div>
+      ) : filteredServers.length === 0 ? (
         <div className="empty-state">
           <p>
-            {searchQuery || priceFilter !== "all"
+            {searchQuery || priceFilter !== "all" || selectedCategory !== "all"
               ? "No servers match your current search & filters."
               : "No servers available yet. Be the first to register!"}
           </p>
@@ -393,12 +518,13 @@ export function DiscoverPage() {
             <button className="btn btn-primary" onClick={() => navigate("/submit")}>
               Register Server
             </button>
-            {(searchQuery || priceFilter !== "all") && (
+            {(searchQuery || priceFilter !== "all" || selectedCategory !== "all") && (
               <button
                 className="btn ghost"
                 onClick={() => {
                   setSearchQuery("");
                   setPriceFilter("all");
+                  setSelectedCategory("all");
                 }}
               >
                 Reset filters
@@ -422,5 +548,74 @@ export function DiscoverPage() {
         </section>
       )}
     </div>
+  );
+}
+
+// Category Section Component with horizontal scrolling
+function CategorySection({
+  category,
+  servers,
+  onViewDetails,
+  onTryServer,
+}: {
+  category: string;
+  servers: ServerEntry[];
+  onViewDetails: (slug: string) => void;
+  onTryServer: (slug: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollRef.current) {
+      const scrollAmount = 400;
+      scrollRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  return (
+    <section className="category-section">
+      <div className="category-section-header">
+        <div className="category-title-group">
+          <span className="category-icon">{CATEGORY_ICONS[category]}</span>
+          <div>
+            <h2 className="category-title">{CATEGORY_LABELS[category]} Servers</h2>
+            <p className="category-description">{CATEGORY_DESCRIPTIONS[category]}</p>
+          </div>
+        </div>
+        <div className="category-count">{servers.length}</div>
+      </div>
+      
+      <div className="category-scroll-container">
+        <button
+          className="scroll-button scroll-left"
+          onClick={() => scroll('left')}
+          aria-label="Scroll left"
+        >
+          ‹
+        </button>
+        <div className="category-cards-scroll" ref={scrollRef}>
+          {servers.map((server) => (
+            <div key={server.id} className="category-card-wrapper">
+              <APICard
+                server={server}
+                onViewDetails={() => onViewDetails(server.slug)}
+                onTryServer={() => onTryServer(server.slug)}
+                variant="grid"
+              />
+            </div>
+          ))}
+        </div>
+        <button
+          className="scroll-button scroll-right"
+          onClick={() => scroll('right')}
+          aria-label="Scroll right"
+        >
+          ›
+        </button>
+      </div>
+    </section>
   );
 }
