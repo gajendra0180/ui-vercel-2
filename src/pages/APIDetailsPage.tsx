@@ -147,6 +147,72 @@ export function APIDetailsPage() {
     return `$${usdcAmount.toFixed(2)}`;
   };
 
+  // Format BigInt numbers for display with readable units (K, M, B, T, etc.)
+  // Note: Token values are in wei (18 decimals), so we divide by 1e18 first
+  const formatBigNumber = (value: string) => {
+    try {
+      const bigIntValue = BigInt(value);
+      if (bigIntValue === 0n) return "0";
+      
+      // Convert from wei to tokens (divide by 1e18)
+      const tokensBigInt = bigIntValue / BigInt(1e18);
+      if (tokensBigInt === 0n) return "0";
+      
+      // Define units with readable suffixes (for token amounts after dividing by 1e18)
+      const units = [
+        { value: 1e12, suffix: 'T' },   // Trillion
+        { value: 1e9, suffix: 'B' },    // Billion
+        { value: 1e6, suffix: 'M' },    // Million
+        { value: 1e3, suffix: 'K' },    // Thousand
+      ];
+      
+      const numValue = Number(tokensBigInt);
+      
+      // If number is small enough, just format with commas
+      if (numValue < 1000) {
+        return numValue.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      }
+      
+      // Find the appropriate unit
+      for (const unit of units) {
+        if (numValue >= unit.value) {
+          const divided = numValue / unit.value;
+          
+          // Adjust decimal places based on magnitude for readability
+          let decimals = 2;
+          if (divided >= 1000) decimals = 0;
+          else if (divided >= 100) decimals = 1;
+          else if (divided >= 10) decimals = 2;
+          else decimals = 3;
+          
+          const formatted = divided.toFixed(decimals);
+          // Remove trailing zeros for cleaner display
+          return `${parseFloat(formatted)}${unit.suffix}`;
+        }
+      }
+      
+      // Fallback: format with commas
+      return numValue.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    } catch {
+      return value;
+    }
+  };
+
+  // Format token amount for display
+  const formatTokenAmount = (tokens: string | null) => {
+    if (!tokens) return null;
+    try {
+      const tokensBigInt = BigInt(tokens);
+      const tokensNum = Number(tokensBigInt) / 1e18; // Assuming 18 decimals for IAO tokens
+      if (tokensNum < 0.01) {
+        return tokensNum.toExponential(2);
+      }
+      return tokensNum.toLocaleString(undefined, { maximumFractionDigits: 4 });
+    } catch {
+      return tokens;
+    }
+  };
+
   if (loading) {
     return (
       <div className="api-details-page">
@@ -189,6 +255,19 @@ export function APIDetailsPage() {
               <span className="price-label">Selected API Price</span>
               <span className="price-value">{formatFee(selectedApi.fee)}</span>
             </div>
+            {metrics?.apisWithTokenAmounts && (() => {
+              const apiWithTokens = metrics.apisWithTokenAmounts.find(a => a.slug === selectedApi.slug);
+              const tokenAmount = apiWithTokens?.tokensPerCall ? formatTokenAmount(apiWithTokens.tokensPerCall) : null;
+              if (tokenAmount) {
+                return (
+                  <div className="price-badge" style={{ marginTop: '10px', backgroundColor: '#10b981', color: 'white' }}>
+                    <span className="price-label">Incentive per call</span>
+                    <span className="price-value" style={{ fontWeight: 'bold' }}>{tokenAmount} {server.symbol}</span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
         )}
       </div>
@@ -226,34 +305,48 @@ export function APIDetailsPage() {
             {metrics.contract && (
               <div className="contract-metrics">
                 <h4>🎯 Token Bonding Progress</h4>
-                <div className="bonding-progress">
-                  <div className="progress-bar-container">
-                    <div 
-                      className="progress-bar" 
-                      style={{ width: `${Math.min(metrics.contract.bondingProgress, 100)}%` }}
-                    />
+                {metrics.contract.error ? (
+                  <div className="metrics-error">
+                    <strong>⚠️ Error loading contract metrics:</strong>
+                    <p>{metrics.contract.error}</p>
+                    <p style={{ fontSize: '0.875rem', marginTop: '8px', opacity: 0.8 }}>
+                      This usually means the contract address is invalid, the contract doesn't exist, or there's a connection issue.
+                      Token address: <code>{metrics.contract.tokenAddress}</code>
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    <div className="bonding-progress">
+                      <div className="progress-bar-container">
+                        <div 
+                          className="progress-bar" 
+                          style={{ width: `${Math.min(metrics.contract.bondingProgress, 100)}%` }}
+                        />
+                      </div>
                   <div className="progress-info">
-                    <span>{metrics.contract.bondingProgress.toFixed(2)}%</span>
+                    <span>
+                      {metrics.contract.bondingProgress < 0.01 
+                        ? metrics.contract.bondingProgress.toFixed(6) + '%' 
+                        : metrics.contract.bondingProgress.toFixed(2) + '%'}
+                    </span>
                     <span className="progress-details">
-                      {parseFloat(metrics.contract.totalTokensDistributed).toLocaleString()} / {parseFloat(metrics.contract.graduationThreshold).toLocaleString()} tokens
+                      {formatBigNumber(metrics.contract.totalTokensDistributed)} / {formatBigNumber(metrics.contract.graduationThreshold)} tokens
                     </span>
                   </div>
-                </div>
-                {metrics.contract.isGraduated && metrics.contract.uniswapLink && (
-                  <div className="uniswap-link">
-                    <a 
-                      href={metrics.contract.uniswapLink} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      title="View token pool on Uniswap (opens in new tab)"
-                    >
-                      🔗 View Pool on Uniswap
-                    </a>
-                  </div>
-                )}
-                {metrics.contract.error && (
-                  <div className="metrics-error">⚠️ {metrics.contract.error}</div>
+                    </div>
+                    {metrics.contract.isGraduated && metrics.contract.uniswapLink && (
+                      <div className="uniswap-link">
+                        <a 
+                          href={metrics.contract.uniswapLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          title="View token pool on Uniswap (opens in new tab)"
+                        >
+                          🔗 View Pool on Uniswap
+                        </a>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -308,6 +401,18 @@ export function APIDetailsPage() {
                     <span className="api-fee">{formatFee(apiItem.fee)}</span>
                     {selectedApiSlug === apiItem.slug && <span className="selected-badge">✓ Selected</span>}
                   </div>
+                  {metrics?.apisWithTokenAmounts && (() => {
+                    const apiWithTokens = metrics.apisWithTokenAmounts.find(a => a.slug === apiItem.slug);
+                    const tokenAmount = apiWithTokens?.tokensPerCall ? formatTokenAmount(apiWithTokens.tokensPerCall) : null;
+                    if (tokenAmount) {
+                      return (
+                        <div style={{ marginTop: '8px', fontSize: '0.875rem', color: '#4ade80' }}>
+                          <strong>Incentive:</strong> {tokenAmount} {server.symbol} per call
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                   {apiItem.description && (
                     <p className="api-description">{apiItem.description}</p>
                   )}
@@ -327,6 +432,14 @@ export function APIDetailsPage() {
             <div className="selected-api-info">
               <p><strong>Selected API:</strong> {selectedApi.name}</p>
               <p><strong>Price:</strong> {formatFee(selectedApi.fee)}</p>
+              {metrics?.apisWithTokenAmounts && (() => {
+                const apiWithTokens = metrics.apisWithTokenAmounts.find(a => a.slug === selectedApi.slug);
+                const tokenAmount = apiWithTokens?.tokensPerCall ? formatTokenAmount(apiWithTokens.tokensPerCall) : null;
+                if (tokenAmount) {
+                  return <p><strong>Incentive:</strong> <span style={{ color: '#4ade80', fontWeight: 'bold' }}>{tokenAmount} {server.symbol} per call</span></p>;
+                }
+                return null;
+              })()}
               <p className="api-url-preview"><code>/api/{server.slug}/{selectedApi.slug}{queryParams.trim() ? `?${queryParams.trim()}` : ''}</code></p>
               {selectedApi.description && <p className="api-desc">{selectedApi.description}</p>}
             </div>

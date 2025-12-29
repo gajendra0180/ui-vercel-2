@@ -262,8 +262,19 @@ export interface ServerMetrics {
     bondingProgress: number;
     isGraduated: boolean;
     uniswapLink?: string;
+    paymentTokenPrice?: string | null;
+    paymentTokenDecimals?: number | null;
     error?: string;
   } | null;
+  apisWithTokenAmounts?: Array<{
+    index: number;
+    slug: string;
+    name: string;
+    description: string;
+    fee: string;
+    createdAt: string;
+    tokensPerCall: string | null;
+  }>;
 }
 
 /**
@@ -301,7 +312,11 @@ export async function getServerMetrics(serverSlug: string): Promise<ServerMetric
 
     const data = await response.json();
     if (data.success && data.metrics) {
-      return data.metrics;
+      // Include apisWithTokenAmounts from the top level response
+      return {
+        ...data.metrics,
+        apisWithTokenAmounts: data.apisWithTokenAmounts,
+      };
     }
     
     return null;
