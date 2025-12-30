@@ -352,3 +352,44 @@ export async function getApiMetrics(serverSlug: string, apiSlug: string): Promis
     return null;
   }
 }
+
+/**
+ * Transaction entry from the request queue
+ */
+export interface TransactionEntry {
+  id: string;
+  iaoToken: string;
+  from: string;
+  globalRequestNumber: string;
+  fee: string;
+  createdAt: string;
+  server: {
+    slug: string;
+    name: string;
+    symbol: string;
+  } | null;
+}
+
+/**
+ * Get recent transactions across all servers
+ */
+export async function getRecentTransactions(limit: number = 20): Promise<TransactionEntry[]> {
+  try {
+    const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    const response = await fetch(`${baseUrl}/api/transactions?limit=${limit}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch transactions: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.success && data.transactions) {
+      return data.transactions;
+    }
+    
+    return [];
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    return [];
+  }
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAllServers, ServerEntry } from "../utils/api";
+import { getAllServers, ServerEntry, getRecentTransactions, TransactionEntry } from "../utils/api";
 import "./OverviewPage.css";
 
 interface LeaderboardEntry {
@@ -40,20 +40,25 @@ const formatRelativeTime = (timestamp: string | null) => {
 export function OverviewPage() {
   const navigate = useNavigate();
   const [servers, setServers] = useState<ServerEntry[]>([]);
+  const [transactions, setTransactions] = useState<TransactionEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [leaderboardMode, setLeaderboardMode] = useState<"volume" | "buyers" | "transactions">("volume");
 
   useEffect(() => {
-    loadServers();
+    loadData();
   }, []);
 
-  const loadServers = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const allServers = await getAllServers();
+      const [allServers, recentTxs] = await Promise.all([
+        getAllServers(),
+        getRecentTransactions(15), // Fetch last 15 transactions
+      ]);
       setServers(allServers);
+      setTransactions(recentTxs);
     } catch (error) {
-      console.error("Failed to load servers:", error);
+      console.error("Failed to load data:", error);
     } finally {
       setLoading(false);
     }
@@ -339,6 +344,58 @@ export function OverviewPage() {
                   >
                     View
                   </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Recent Transactions Feed */}
+      <section className="transactions-section">
+        <div className="transactions-header">
+          <h2 className="section-title">⚡ Recent Transactions</h2>
+          <p className="section-subtitle">Latest API calls across the ecosystem</p>
+        </div>
+
+        {transactions.length === 0 ? (
+          <div className="empty-transactions">
+            <p>No transactions yet. Be the first to make an API call!</p>
+            <button className="btn btn-primary" onClick={() => navigate("/marketplace")}>
+              Browse APIs
+            </button>
+          </div>
+        ) : (
+          <div className="transactions-list">
+            {transactions.map((tx) => (
+              <div key={tx.id} className="transaction-item">
+                <div className="tx-icon">⚡</div>
+                <div className="tx-content">
+                  <div className="tx-main">
+                    <span className="tx-user">
+                      {tx.from.slice(0, 6)}...{tx.from.slice(-4)}
+                    </span>
+                    <span className="tx-action">called API on</span>
+                    {tx.server ? (
+                      <button
+                        className="tx-server"
+                        onClick={() => navigate(`/server/${tx.server!.slug}`)}
+                      >
+                        {tx.server.name}
+                      </button>
+                    ) : (
+                      <span className="tx-server-unknown">Unknown Server</span>
+                    )}
+                  </div>
+                  <div className="tx-meta">
+                    <span className="tx-fee">
+                      {formatCurrency(Number(tx.fee) / 1e6)}
+                    </span>
+                    <span className="tx-separator">•</span>
+                    <span className="tx-time">{formatRelativeTime(tx.createdAt)}</span>
+                    <span className="tx-separator">•</span>
+                    <span className="tx-number">#{tx.globalRequestNumber}</span>
+                  </div>
                 </div>
               </div>
             ))}
