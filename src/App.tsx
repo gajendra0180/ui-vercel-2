@@ -1,7 +1,8 @@
 import { ThirdwebProvider, ConnectButton } from "thirdweb/react";
 import { baseSepolia } from "thirdweb/chains";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
-import { DiscoverPage } from "./pages/DiscoverPage";
+import { OverviewPage } from "./pages/OverviewPage";
+import { MarketplacePage } from "./pages/MarketplacePage";
 import { APIDetailsPage } from "./pages/APIDetailsPage";
 import { SubmitAPIForm } from "./pages/SubmitAPIForm";
 import { Dashboard } from "./pages/Dashboard";
@@ -20,7 +21,10 @@ function Navigation() {
       </div>
       <div className="nav-links">
         <Link to="/" className={isActive("/") ? "active" : ""}>
-          🏠 Discover
+          📊 Overview
+        </Link>
+        <Link to="/marketplace" className={isActive("/marketplace") ? "active" : ""}>
+          🛍️ Marketplace
         </Link>
         <Link to="/submit" className={isActive("/submit") ? "active" : ""}>
           🖥️ Register Server
@@ -45,7 +49,8 @@ function AppContent() {
 
       <main className="main-content">
         <Routes>
-          <Route path="/" element={<DiscoverPage />} />
+          <Route path="/" element={<OverviewPage />} />
+          <Route path="/marketplace" element={<MarketplacePage />} />
           <Route path="/server/:serverSlug" element={<APIDetailsPage />} />
           <Route path="/submit" element={<SubmitAPIForm />} />
           <Route path="/dashboard" element={<Dashboard />} />
