@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAllServers, ServerEntry, getRecentTransactions, TransactionEntry } from "../utils/api";
+import { Spinner } from "../components/Spinner";
+import { EmptyState } from "../components/EmptyState";
 import "./OverviewPage.css";
 
 interface LeaderboardEntry {
@@ -158,14 +160,8 @@ export function OverviewPage() {
   if (loading) {
     return (
       <div className="overview-page">
-        <div className="overview-loading">
-          <div className="loading-hero shimmer" />
-          <div className="loading-stats">
-            {[...Array(5)].map((_, idx) => (
-              <div key={idx} className="stat-skeleton shimmer" />
-            ))}
-          </div>
-          <div className="loading-leaderboard shimmer" />
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '600px' }}>
+          <Spinner size="large" label="Loading ecosystem statistics..." />
         </div>
       </div>
     );
@@ -270,12 +266,16 @@ export function OverviewPage() {
         </div>
 
         {leaderboard.length === 0 ? (
-          <div className="empty-leaderboard">
-            <p>No servers with activity yet. Be the first!</p>
-            <button className="btn btn-primary" onClick={() => navigate("/submit")}>
-              Register Your Server
-            </button>
-          </div>
+          <EmptyState
+            icon="🏆"
+            title="Leaderboard Coming Soon"
+            description="No servers have API activity yet. Be the first to register your server and start monetizing your APIs!"
+            actionButton={{
+              label: "📈 Register Your Server",
+              variant: "primary",
+              onClick: () => navigate("/submit")
+            }}
+          />
         ) : (
           <div className="leaderboard-table">
             <div className="table-header">
@@ -359,12 +359,16 @@ export function OverviewPage() {
         </div>
 
         {transactions.length === 0 ? (
-          <div className="empty-transactions">
-            <p>No transactions yet. Be the first to make an API call!</p>
-            <button className="btn btn-primary" onClick={() => navigate("/marketplace")}>
-              Browse APIs
-            </button>
-          </div>
+          <EmptyState
+            icon="⚡"
+            title="No Activity Yet"
+            description="The transaction feed will light up once the community starts making API calls. Browse the marketplace to discover available APIs and be the first to make a call!"
+            actionButton={{
+              label: "🔍 Browse APIs",
+              variant: "primary",
+              onClick: () => navigate("/marketplace")
+            }}
+          />
         ) : (
           <div className="transactions-list">
             {transactions.map((tx) => (

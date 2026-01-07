@@ -1,7 +1,7 @@
 // Contract addresses for IAO platform
 
 // Token Factory Contract (creates new IAO tokens)
-export const TOKEN_FACTORY_ADDRESS = "0x5a40F7f30b25D07aB1C06dEB7400554Bc20f8ad4";
+export const TOKEN_FACTORY_ADDRESS = "0xF110bA6BBc7cD595842B6b56ab870faC811e41B5";
 
 // USDC on Base mainnet (payment token)
 export const USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";

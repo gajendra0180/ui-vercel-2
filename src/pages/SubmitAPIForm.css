@@ -272,6 +272,35 @@
   font-size: 1.05rem;
 }
 
+.connect-button-container {
+  margin: 32px 0 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.connect-button-container button {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  border: none;
+  padding: 12px 32px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.connect-button-container button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(99, 102, 241, 0.3);
+}
+
+.connect-hint {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.9rem;
+  margin-top: 16px;
+}
+
 /* ===== Existing Server Notice ===== */
 .existing-token-notice {
   text-align: center;

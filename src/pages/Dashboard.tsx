@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useActiveAccount } from "thirdweb/react";
 import { parseUnits } from "viem";
 import { getAllServers, addApiToServer, ServerEntry } from "../utils/api";
+import { Spinner } from "../components/Spinner";
+import { EmptyState } from "../components/EmptyState";
 import "./Dashboard.css";
 
 // Validate slug format: lowercase alphanumeric with hyphens, 3-30 chars
@@ -21,6 +24,7 @@ function generateSlugFromName(name: string): string {
 }
 
 export function Dashboard() {
+  const navigate = useNavigate();
   const account = useActiveAccount();
   const [myServer, setMyServer] = useState<ServerEntry | null>(null);
   const [loading, setLoading] = useState(true);
@@ -156,7 +160,7 @@ export function Dashboard() {
       } else {
         setAddError(result.error || "Failed to add API");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       setAddError(error.message || "Failed to add API");
     } finally {
       setAddingApi(false);
@@ -186,14 +190,20 @@ export function Dashboard() {
         <div className="dashboard-section">
           <h2>🖥️ My Server</h2>
           {loading ? (
-            <div className="loading-state">Loading your server...</div>
-          ) : !myServer ? (
-            <div className="empty-state">
-              <p>You haven't registered a server yet.</p>
-              <a href="/submit" className="btn btn-primary">
-                Register Your Server
-              </a>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
+              <Spinner size="large" label="Loading your server..." />
             </div>
+          ) : !myServer ? (
+            <EmptyState
+              icon="🖥️"
+              title="No Server Registered"
+              description="Create your API marketplace presence by registering a server. This will enable you to monetize your APIs through pay-per-call endpoints."
+              actionButton={{
+                label: "🚀 Register Server",
+                variant: "primary",
+                onClick: () => navigate("/submit")
+              }}
+            />
           ) : (
             <div className="token-card">
               <div className="token-header">
@@ -328,7 +338,16 @@ export function Dashboard() {
                   </div>
                 ))
               ) : (
-                <p className="no-apis">No APIs registered yet. Click "Add API" to get started.</p>
+                <EmptyState
+                  icon="🔌"
+                  title="No APIs Added Yet"
+                  description="Start monetizing your services by adding APIs to your server. Each API will receive a unique pay-per-call endpoint."
+                  actionButton={{
+                    label: "➕ Add Your First API",
+                    variant: "primary",
+                    onClick: () => setShowAddApiForm(!showAddApiForm)
+                  }}
+                />
               )}
             </div>
           </div>

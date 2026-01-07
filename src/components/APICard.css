@@ -37,6 +37,13 @@
   opacity: 1;
 }
 
+/* Keyboard Focus - Accessibility */
+.api-card:focus-visible {
+  outline: 2px solid var(--primary, #6366f1);
+  outline-offset: 2px;
+  box-shadow: 0 12px 32px rgba(99, 102, 241, 0.25), 0 0 0 1px rgba(99, 102, 241, 0.2);
+}
+
 /* List View */
 .api-card.list {
   flex-direction: row;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useActiveAccount, useActiveWalletChain, useSendTransaction } from "thirdweb/react";
+import { useActiveAccount, useActiveWalletChain, useSendTransaction, ConnectButton } from "thirdweb/react";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
 import { baseSepolia } from "thirdweb/chains";
 import { parseUnits, parseEventLogs, createPublicClient, http } from "viem";
@@ -9,6 +9,8 @@ import { TOKEN_FACTORY_ADDRESS, TOKEN_FACTORY_ABI } from "../contracts/tokenFact
 import { USDC_ADDRESS } from "../constants/addresses";
 import { thirdwebClient } from "../lib/thirdwebClient";
 import { getAllServers, ServerEntry, checkServerSlugExists } from "../utils/api";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { Tooltip } from "../components/Tooltip";
 import "./SubmitAPIForm.css";
 
 // @ts-ignore - Vite env variable
@@ -123,6 +125,9 @@ export function SubmitAPIForm() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [slugError, setSlugError] = useState<string | null>(null);
   const [serverSlugManuallyEdited, setServerSlugManuallyEdited] = useState(false);
+
+  // Confirmation dialog state
+  const [showRegisterConfirm, setShowRegisterConfirm] = useState(false);
 
   // Auto-generate server slug from name (only if not manually edited)
   useEffect(() => {
@@ -277,6 +282,17 @@ export function SubmitAPIForm() {
       return;
     }
 
+    // Show confirmation dialog before proceeding
+    setShowRegisterConfirm(true);
+  };
+
+  const handleConfirmRegister = async () => {
+    if (!account || !chain) {
+      setError("Wallet not connected or wrong network");
+      setShowRegisterConfirm(false);
+      return;
+    }
+
     try {
       setError(null);
       setSuccess(false);
@@ -314,7 +330,7 @@ export function SubmitAPIForm() {
           setError("Contract is currently paused. Token creation is disabled.");
           return;
         }
-      } catch (checkError: any) {
+      } catch (checkError: unknown) {
         console.warn("⚠️ Could not check contract state:", checkError);
       }
 
@@ -351,7 +367,7 @@ export function SubmitAPIForm() {
 
         const validationResult = await validationResponse.json();
         console.log("✅ Validation passed:", validationResult);
-      } catch (validationError: any) {
+      } catch (validationError: unknown) {
         console.error("❌ Validation error:", validationError);
         setError(`Validation failed: ${validationError.message || "Unable to validate registration data"}`);
         return;
@@ -373,6 +389,9 @@ export function SubmitAPIForm() {
       });
 
       console.log("✅ Transaction prepared, sending...");
+
+      // Close confirmation dialog
+      setShowRegisterConfirm(false);
 
       // Send transaction
       sendTransaction(transaction, {
@@ -397,8 +416,8 @@ export function SubmitAPIForm() {
                   hash: result.transactionHash as `0x${string}`,
                 });
                 break;
-              } catch (error: any) {
-                if (error?.message?.includes("not found") || error?.message?.includes("not yet")) {
+              } catch (error: unknown) {
+                if ((error as any)?.message?.includes("not found") || (error as any)?.message?.includes("not yet")) {
                   await new Promise(resolve => setTimeout(resolve, 1000));
                   attempts++;
                 } else {
@@ -411,6 +430,32 @@ export function SubmitAPIForm() {
               throw new Error("Transaction receipt not found after waiting");
             }
 
+            // Debug: Log receipt details
+            console.log("📋 Receipt status:", receipt.status);
+            console.log("📋 Receipt logs count:", receipt.logs?.length || 0);
+            console.log("📋 Receipt hash:", receipt.transactionHash);
+
+            if (receipt.status === "reverted") {
+              console.error("❌ TRANSACTION REVERTED!");
+              throw new Error("Transaction reverted. Check the browser console for details.");
+            }
+
+            if (!receipt.logs || receipt.logs.length === 0) {
+              console.error("❌ NO LOGS IN RECEIPT - Transaction may have failed");
+              console.error("Receipt:", receipt);
+              throw new Error("No logs in transaction receipt - the transaction may have failed silently");
+            }
+
+            // Log all receipts logs for debugging
+            console.log("📝 Logs in receipt:");
+            receipt.logs.forEach((log, i) => {
+              console.log(`  Log ${i}:`, {
+                address: log.address,
+                topics: log.topics,
+                data: log.data,
+              });
+            });
+
             // Parse TokenCreated event to get the token address
             const tokenCreatedEvent = parseEventLogs({
               abi: TOKEN_FACTORY_ABI,
@@ -419,14 +464,19 @@ export function SubmitAPIForm() {
             });
 
             if (!tokenCreatedEvent || tokenCreatedEvent.length === 0) {
-              throw new Error("TokenCreated event not found in transaction receipt");
+              console.error("❌ TokenCreated event not found!");
+              console.error("Expected TokenFactory address:", "0xe5331BBB34376bB0E2b15D7dAaBd0A1E33579E29");
+              console.error("Received logs from:", receipt.logs.map(l => l.address));
+              throw new Error("TokenCreated event not found in transaction receipt - check console for log details");
             }
 
             const tokenAddress = tokenCreatedEvent[0].args.token as string;
-            
+
             if (!tokenAddress) {
               throw new Error("Token address not found in TokenCreated event");
             }
+
+            console.log("✅ Token address retrieved:", tokenAddress);
 
             setSuccess(true);
 
@@ -480,7 +530,7 @@ export function SubmitAPIForm() {
                 }
                 setError(`Transaction succeeded but registration failed: ${errorMessage}`);
               }
-            } catch (registerError: any) {
+            } catch (registerError: unknown) {
               console.error("⚠️ Error registering server with backend:", registerError);
               setError(`Transaction succeeded but registration failed: ${registerError.message}`);
             }
@@ -489,12 +539,12 @@ export function SubmitAPIForm() {
             setTimeout(() => {
               navigate("/");
             }, 3000);
-          } catch (receiptError: any) {
+          } catch (receiptError: unknown) {
             console.error("Error waiting for transaction receipt:", receiptError);
             setError(`Transaction sent but failed to get token address: ${receiptError.message}`);
           }
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           console.error("❌ Transaction error:", err);
           console.error("Error details:", JSON.stringify(err, null, 2));
           
@@ -518,8 +568,9 @@ export function SubmitAPIForm() {
           setError(errorMessage);
         },
       });
-    } catch (err: any) {
-      setError(err.message || "Failed to submit API");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to submit API";
+      setError(message);
       console.error("Submit error:", err);
     }
   };
@@ -529,7 +580,11 @@ export function SubmitAPIForm() {
       <div className="submit-page">
         <div className="connect-prompt">
           <h2>👋 Connect Your Wallet</h2>
-          <p>Please connect your wallet to submit an API</p>
+          <p>Please connect your wallet to register a server</p>
+          <div className="connect-button-container">
+            <ConnectButton client={thirdwebClient} chain={baseSepolia} />
+          </div>
+          <p className="connect-hint">Click the button above to connect your wallet (Rabbit, MetaMask, etc.)</p>
         </div>
       </div>
     );
@@ -628,7 +683,12 @@ export function SubmitAPIForm() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="slug">Server Slug *</label>
+            <Tooltip
+              text="A unique identifier for your server used in API endpoints. Must be lowercase, alphanumeric with hyphens (3-30 characters)"
+              position="top"
+            >
+              <label htmlFor="slug">Server Slug *</label>
+            </Tooltip>
             <input
               id="slug"
               name="slug"
@@ -831,6 +891,36 @@ export function SubmitAPIForm() {
           </p>
         </div>
       </form>
+
+      {/* Confirmation Dialog for Server Registration */}
+      <ConfirmDialog
+        isOpen={showRegisterConfirm}
+        title="Register Server & Create Token?"
+        message={
+          <>
+            <p>You are about to register a new server and create its IAO token:</p>
+            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '6px', margin: '12px 0' }}>
+              <p style={{ margin: '6px 0' }}>
+                <strong>Server:</strong> {formData.name || "Unnamed"}
+              </p>
+              <p style={{ margin: '6px 0' }}>
+                <strong>Slug:</strong> /{formData.slug || "server-slug"}
+              </p>
+              <p style={{ margin: '6px 0' }}>
+                <strong>APIs:</strong> {apis.length}
+              </p>
+            </div>
+            <p style={{ fontSize: '0.9em', opacity: 0.8, marginBottom: 0 }}>
+              ⚠️ This will create a token contract and transaction on Base Sepolia. You will need to sign the transaction with your wallet.
+            </p>
+          </>
+        }
+        variant="danger"
+        confirmText="Yes, Register Server"
+        cancelText="Cancel"
+        onConfirm={handleConfirmRegister}
+        onCancel={() => setShowRegisterConfirm(false)}
+      />
     </div>
   );
 }

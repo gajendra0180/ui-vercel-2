@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ServerEntry, getServerBySlug, buildProxyUrl, getServerMetrics, ServerMetrics } from "../utils/api";
 import { useX402Payment } from "../hooks/useX402Payment";
+import { Spinner } from "../components/Spinner";
+import { Tooltip } from "../components/Tooltip";
 import "./APIDetailsPage.css";
 
 export function APIDetailsPage() {
@@ -34,7 +36,7 @@ export function APIDetailsPage() {
       setMetricsLoading(true);
       const metricsData = await getServerMetrics(serverSlug);
       setMetrics(metricsData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load metrics:", err);
     } finally {
       setMetricsLoading(false);
@@ -55,7 +57,7 @@ export function APIDetailsPage() {
           setSelectedApiSlug(serverData.apis[0].slug);
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err.message || "Failed to load server details");
     } finally {
       setLoading(false);
@@ -81,7 +83,7 @@ export function APIDetailsPage() {
       } else {
         throw new Error("Server not found");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err.message || "Failed to fetch server metadata");
       console.error("Server test error:", err);
     } finally {
@@ -130,7 +132,7 @@ export function APIDetailsPage() {
 
       setApiResult(data);
       setError(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err.message || "Failed to call API");
       console.error("API call error:", err);
     } finally {
@@ -216,7 +218,9 @@ export function APIDetailsPage() {
   if (loading) {
     return (
       <div className="api-details-page">
-        <div className="loading-state">Loading server details...</div>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '500px' }}>
+          <Spinner size="large" label="Loading API details..." />
+        </div>
       </div>
     );
   }
@@ -293,7 +297,12 @@ export function APIDetailsPage() {
                   <span className="metric-value">{metrics.server.averageLatency.toFixed(0)}ms</span>
                 </div>
                 <div className="metric-item">
-                  <span className="metric-label">P95 Latency</span>
+                  <Tooltip
+                    text="95th percentile latency - meaning 95% of requests complete faster than this time"
+                    position="top"
+                  >
+                    <span className="metric-label">P95 Latency</span>
+                  </Tooltip>
                   <span className="metric-value">{metrics.server.p95Latency.toFixed(0)}ms</span>
                 </div>
                 <div className="metric-item">
@@ -304,7 +313,12 @@ export function APIDetailsPage() {
             )}
             {metrics.contract && (
               <div className="contract-metrics">
-                <h4>🎯 Token Bonding Progress</h4>
+                <Tooltip
+                  text="As your API receives calls, tokens are minted following a bonding curve. When this reaches 100%, liquidity deploys to Uniswap for trading."
+                  position="top"
+                >
+                  <h4>🎯 Token Bonding Progress</h4>
+                </Tooltip>
                 {metrics.contract.error ? (
                   <div className="metrics-error">
                     <strong>⚠️ Error loading contract metrics:</strong>

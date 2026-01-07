@@ -4,6 +4,35 @@ import { useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { baseSepolia } from "thirdweb/chains";
 import { USDC_ADDRESS } from "../constants/addresses";
 
+/**
+ * Payment authorization for EIP-3009 transfers
+ */
+export interface PaymentAuthorization {
+  from: string;
+  to: string;
+  value: string;
+  validAfter: string;
+  validBefore: string;
+  nonce: string;
+}
+
+/**
+ * Result of an API call with payment
+ */
+export interface ApiCallResult {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+}
+
+/**
+ * Payment processing state
+ */
+export interface PaymentState {
+  isProcessing: boolean;
+  error: string | null;
+}
+
 export function useX402Payment() {
   const account = useActiveAccount();
   const wallet = useActiveWallet();
@@ -18,7 +47,7 @@ export function useX402Payment() {
     apiUrl: string,
     fee: bigint,
     receiverAddress: string
-  ): Promise<any> => {
+  ): Promise<unknown> => {
     if (!account || !wallet) {
       throw new Error("Please connect your wallet first");
     }
@@ -232,7 +261,7 @@ export function useX402Payment() {
       }
 
       return await initialResponse.json();
-    } catch (err: any) {
+    } catch (err: unknown) {
       let errorMsg = "Failed to process payment";
       if (err) {
         if (typeof err === 'string') {

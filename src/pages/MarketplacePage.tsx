@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getAllServers, ServerEntry } from "../utils/api";
 import { APICard } from "../components/APICard";
+import { Spinner } from "../components/Spinner";
+import { useDebounce } from "../hooks/useDebounce";
 import "./MarketplacePage.css";
 
 type SortOption = "trending" | "newest" | "price-low" | "price-high";
@@ -106,6 +108,7 @@ export function MarketplacePage() {
   const [filteredServers, setFilteredServers] = useState<ServerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [sortBy, setSortBy] = useState<SortOption>("trending");
   const [priceFilter, setPriceFilter] = useState<PriceTier>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>(
@@ -127,21 +130,6 @@ export function MarketplacePage() {
     setSearchParams(searchParams, { replace: true });
   }, [selectedCategory]);
 
-  useEffect(() => {
-    filterAndSortServers();
-  }, [servers, searchQuery, sortBy, priceFilter, selectedCategory]);
-
-  // Group servers by category
-  const serversByCategory = useMemo(() => {
-    const grouped: Record<string, ServerEntry[]> = {};
-    VALID_CATEGORIES.forEach((category) => {
-      grouped[category] = servers.filter((server) =>
-        (server.tags || []).includes(category)
-      );
-    });
-    return grouped;
-  }, [servers]);
-
   const loadServers = async () => {
     try {
       setLoading(true);
@@ -154,12 +142,29 @@ export function MarketplacePage() {
     }
   };
 
-  const filterAndSortServers = () => {
+  // Group servers by category (memoized)
+  const serversByCategory = useMemo(() => {
+    const grouped: Record<string, ServerEntry[]> = {};
+    VALID_CATEGORIES.forEach((category) => {
+      grouped[category] = servers.filter((server) =>
+        (server.tags || []).includes(category)
+      );
+    });
+    return grouped;
+  }, [servers]);
+
+  /**
+   * Memoize expensive filter and sort operations
+   * Impact: Prevents recalculation on unrelated state changes
+   * Only recalculates when actual filters/sort/servers change
+   * Uses debounced search query to avoid excessive filtering
+   */
+  const filteredAndSortedServers = useMemo(() => {
     let filtered = [...servers];
 
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+    // Filter by search query (case-insensitive)
+    if (debouncedSearchQuery) {
+      const query = debouncedSearchQuery.toLowerCase();
       filtered = filtered.filter(
         (server) =>
           server.name.toLowerCase().includes(query) ||
@@ -188,19 +193,21 @@ export function MarketplacePage() {
       });
     }
 
-    // Sort
+    // Sort by selected option
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case "trending":
+        case "trending": {
           const aCount = parseInt(a.subscriptionCount || "0");
           const bCount = parseInt(b.subscriptionCount || "0");
           return bCount - aCount;
-        case "newest":
+        }
+        case "newest": {
           if (a.createdAt && b.createdAt) {
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           }
           return b.id.localeCompare(a.id);
-        case "price-low":
+        }
+        case "price-low": {
           const aMinPrice =
             a.apis && a.apis.length > 0
               ? Math.min(...a.apis.map((api) => formatUSDC(api.fee)))
@@ -210,7 +217,8 @@ export function MarketplacePage() {
               ? Math.min(...b.apis.map((api) => formatUSDC(api.fee)))
               : 0;
           return aMinPrice - bMinPrice;
-        case "price-high":
+        }
+        case "price-high": {
           const aMaxPrice =
             a.apis && a.apis.length > 0
               ? Math.max(...a.apis.map((api) => formatUSDC(api.fee)))
@@ -220,13 +228,19 @@ export function MarketplacePage() {
               ? Math.max(...b.apis.map((api) => formatUSDC(api.fee)))
               : 0;
           return bMaxPrice - aMaxPrice;
+        }
         default:
           return 0;
       }
     });
 
-    setFilteredServers(filtered);
-  };
+    return filtered;
+  }, [servers, debouncedSearchQuery, sortBy, priceFilter, selectedCategory]);
+
+  // Update filtered servers when memoized results change
+  useEffect(() => {
+    setFilteredServers(filteredAndSortedServers);
+  }, [filteredAndSortedServers]);
 
   const handleViewDetails = (serverSlug: string) => {
     navigate(`/server/${serverSlug}`);
@@ -244,14 +258,8 @@ export function MarketplacePage() {
   if (loading) {
     return (
       <div className="marketplace-page">
-        <div className="marketplace-loading">
-          <div className="loading-hero shimmer" />
-          <div className="loading-categories shimmer" />
-          <div className="loading-grid">
-            {[...Array(6)].map((_, idx) => (
-              <div key={idx} className="card-skeleton shimmer" />
-            ))}
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '600px' }}>
+          <Spinner size="large" label="Loading API servers..." />
         </div>
       </div>
     );
@@ -274,7 +282,12 @@ export function MarketplacePage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="search-input-hero"
+              aria-label="Search API servers by name, symbol, or category"
+              aria-describedby="search-help"
             />
+            <p id="search-help" className="sr-only">
+              Type to search for API servers. Results update as you type.
+            </p>
           </div>
         </div>
       </section>
@@ -285,6 +298,8 @@ export function MarketplacePage() {
           <button
             className={`category-nav-item ${selectedCategory === "all" ? "active" : ""}`}
             onClick={() => handleCategorySelect("all")}
+            aria-label="Show all API servers"
+            aria-current={selectedCategory === "all" ? "page" : undefined}
           >
             <span className="category-nav-icon">🏠</span>
             <span className="category-nav-label">All Servers</span>
@@ -298,6 +313,8 @@ export function MarketplacePage() {
                 key={category}
                 className={`category-nav-item ${selectedCategory === category ? "active" : ""}`}
                 onClick={() => handleCategorySelect(category)}
+                aria-label={`Show ${CATEGORY_LABELS[category]} servers (${count})`}
+                aria-current={selectedCategory === category ? "page" : undefined}
               >
                 <span className="category-nav-icon">{CATEGORY_ICONS[category]}</span>
                 <span className="category-nav-label">{CATEGORY_LABELS[category]}</span>
@@ -327,11 +344,13 @@ export function MarketplacePage() {
         </div>
         <div className="controls-right">
           <div className="filter-group">
-            <label>Price:</label>
+            <label htmlFor="price-filter">Price:</label>
             <select
+              id="price-filter"
               value={priceFilter}
               onChange={(e) => setPriceFilter(e.target.value as PriceTier)}
               className="filter-select"
+              aria-label="Filter servers by price tier"
             >
               <option value="all">All Prices</option>
               <option value="starter">Starter {PRICE_TIER_META.starter.description}</option>
@@ -341,11 +360,13 @@ export function MarketplacePage() {
           </div>
 
           <div className="filter-group">
-            <label>Sort:</label>
+            <label htmlFor="sort-select">Sort:</label>
             <select
+              id="sort-select"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
               className="filter-select"
+              aria-label="Sort servers by trending, newest, or price"
             >
               <option value="trending">🔥 Trending</option>
               <option value="newest">🆕 Newest</option>
