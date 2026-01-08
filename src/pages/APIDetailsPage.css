@@ -362,6 +362,149 @@
   border-radius: 10px;
 }
 
+/* ===== API Documentation Section ===== */
+.api-documentation-section {
+  margin-bottom: 28px;
+}
+
+.documentation-card {
+  background: var(--bg-card, #12121a);
+  padding: 32px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.documentation-card h3 {
+  margin: 0;
+  color: var(--text-primary, #f1f5f9);
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.api-url-display {
+  background: var(--bg-elevated, #1e1e2a);
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.api-url-display strong {
+  font-size: 0.85rem;
+  color: var(--text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.api-url-display code {
+  background: var(--bg-card, #12121a);
+  color: var(--primary, #6366f1);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  word-break: break-all;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.code-examples-tabs {
+  margin-bottom: 24px;
+}
+
+.code-examples-tabs h4 {
+  margin: 0 0 16px 0;
+  color: var(--text-primary, #f1f5f9);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.code-example-section {
+  margin-bottom: 20px;
+}
+
+.code-example-section:last-child {
+  margin-bottom: 0;
+}
+
+.code-example-section h5 {
+  margin: 0 0 12px 0;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.api-description-box {
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.api-description-box h4 {
+  margin: 0 0 12px 0;
+  color: var(--text-primary, #f1f5f9);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.api-description-box p {
+  margin: 0;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.api-pricing-info {
+  margin-top: 24px;
+}
+
+.api-pricing-info h4 {
+  margin: 0 0 16px 0;
+  color: var(--text-primary, #f1f5f9);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.pricing-item {
+  background: var(--bg-elevated, #1e1e2a);
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pricing-label {
+  font-size: 0.85rem;
+  color: var(--text-muted, #64748b);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pricing-value {
+  font-size: 1.1rem;
+  color: var(--text-primary, #f1f5f9);
+  font-weight: 700;
+}
+
+.pricing-value.highlight {
+  color: var(--primary, #6366f1);
+}
+
 /* ===== Result Boxes ===== */
 .error-box {
   background: rgba(239, 68, 68, 0.08);

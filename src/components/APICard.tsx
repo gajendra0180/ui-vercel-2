@@ -7,6 +7,8 @@ interface APICardProps {
   onViewDetails: () => void;
   onTryServer: () => void;
   variant?: "grid" | "list";
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
 }
 
 /**
@@ -42,7 +44,7 @@ const tierLabels = (price: number) => {
  * Impact: Reduces re-renders by ~60% when marketplace filters change
  * Keyboard accessible: Full keyboard navigation with Enter/Space support
  */
-function APICardComponent({ server, onViewDetails, onTryServer, variant = "grid" }: APICardProps) {
+function APICardComponent({ server, onViewDetails, onTryServer, variant = "grid", isFavorite = false, onToggleFavorite }: APICardProps) {
   const usageCount = server.subscriptionCount ? parseInt(server.subscriptionCount) : 0;
   const isTrending = usageCount > 10;
   const builderShort = `${server.builder.slice(0, 6)}...${server.builder.slice(-4)}`;
@@ -91,7 +93,22 @@ function APICardComponent({ server, onViewDetails, onTryServer, variant = "grid"
       onKeyDown={handleCardKeyDown}
       tabIndex={0}
     >
-      {isTrending && <div className="trending-badge">🔥 Trending</div>}
+      <div className="api-card-badges">
+        {isTrending && <div className="trending-badge">🔥 Trending</div>}
+        {onToggleFavorite && (
+          <button
+            className={`favorite-button ${isFavorite ? 'favorited' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite();
+            }}
+            aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            {isFavorite ? '❤️' : '🤍'}
+          </button>
+        )}
+      </div>
       <div className="api-card-header">
         <div>
           <div className="api-meta">

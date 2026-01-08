@@ -2,11 +2,14 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getAgent, AgentWithStats } from "../utils/api";
 import { Spinner } from "../components/Spinner";
+import { Breadcrumb } from "../components/Breadcrumb";
+import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import "./AgentDetailsPage.css";
 
 export function AgentDetailsPage() {
   const { agentId } = useParams<{ agentId: string }>();
   const navigate = useNavigate();
+  const { copy, copied } = useCopyToClipboard();
 
   const [agent, setAgent] = useState<AgentWithStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,6 +97,13 @@ export function AgentDetailsPage() {
         ← Back to Marketplace
       </button>
 
+      <Breadcrumb
+        items={[
+          { label: 'Agent Marketplace', path: '/agent-marketplace' },
+          { label: agent.name }
+        ]}
+      />
+
       <div className="agent-header">
         <div className="agent-title-section">
           <h1>🤖 {agent.name}</h1>
@@ -116,10 +126,32 @@ export function AgentDetailsPage() {
           <h3>ℹ️ Agent Information</h3>
           <div className="info-grid">
             <div className="info-item">
+              <span className="info-label">Agent ID:</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <code className="info-value">{agent.id}</code>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => copy(agent.id)}
+                  style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                >
+                  {copied ? '✓' : 'Copy'}
+                </button>
+              </div>
+            </div>
+            <div className="info-item">
               <span className="info-label">Creator:</span>
-              <code className="info-value address-value">
-                {truncateAddress(agent.creator)}
-              </code>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <code className="info-value address-value">
+                  {truncateAddress(agent.creator)}
+                </code>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => copy(agent.creator)}
+                  style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                >
+                  {copied ? '✓' : 'Copy'}
+                </button>
+              </div>
             </div>
             <div className="info-item">
               <span className="info-label">LLM Provider:</span>

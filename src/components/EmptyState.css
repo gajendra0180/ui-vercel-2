@@ -17,13 +17,13 @@
 .empty-state-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary, #f1f5f9);
   margin: 0 0 8px 0;
 }
 
 .empty-state-description {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-secondary, #94a3b8);
   margin: 0 0 24px 0;
   max-width: 400px;
   line-height: 1.6;
@@ -40,14 +40,13 @@
 }
 
 .empty-state-button-primary {
-  background-color: #3b82f6;
+  background: linear-gradient(135deg, var(--primary, #6366f1) 0%, var(--primary-dark, #4f46e5) 100%);
   color: white;
 }
 
 .empty-state-button-primary:hover {
-  background-color: #2563eb;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
 }
 
 .empty-state-button-primary:active {
@@ -55,12 +54,14 @@
 }
 
 .empty-state-button-secondary {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--bg-elevated, #1e1e2a);
+  color: var(--text-primary, #f1f5f9);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
 }
 
 .empty-state-button-secondary:hover {
-  background-color: #e5e7eb;
+  background-color: var(--bg-card-hover, #1a1a24);
+  border-color: var(--border-color-hover, rgba(255, 255, 255, 0.15));
   transform: translateY(-2px);
 }
 

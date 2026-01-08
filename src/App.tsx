@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-do
 import { Suspense, lazy, useState } from "react";
 import { Spinner } from "./components/Spinner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ToastProvider } from "./contexts/ToastContext";
 import "./App.css";
 import { thirdwebClient, THIRDWEB_CLIENT_ID } from "./lib/thirdwebClient";
 
@@ -130,7 +131,9 @@ function App() {
       {/* @ts-ignore - ThirdwebProvider type definitions may be outdated */}
       <ThirdwebProvider clientId={THIRDWEB_CLIENT_ID}>
         <BrowserRouter>
-          <AppContent />
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
         </BrowserRouter>
       </ThirdwebProvider>
     </ErrorBoundary>

@@ -1,0 +1,131 @@
+.code-block {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 10px);
+  overflow: hidden;
+  margin: var(--spacing-md, 16px) 0;
+}
+
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.code-block-language {
+  font-size: var(--font-xs, 0.75rem);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.code-block-copy {
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-secondary, #94a3b8);
+  font-size: var(--font-xs, 0.75rem);
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-fast, 150ms ease);
+}
+
+.code-block-copy:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--border-color-hover, rgba(255, 255, 255, 0.15));
+  color: var(--text-primary, #f1f5f9);
+}
+
+.code-block-pre {
+  margin: 0;
+  padding: var(--spacing-md, 16px);
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.code-block-code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: var(--font-sm, 0.875rem);
+  line-height: var(--leading-relaxed, 1.75);
+  color: var(--text-primary, #f1f5f9);
+  display: block;
+}
+
+/* Line numbers table */
+.code-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.line-number {
+  padding-right: var(--spacing-md, 16px);
+  color: var(--text-muted, #64748b);
+  text-align: right;
+  user-select: none;
+  vertical-align: top;
+  width: 1%;
+}
+
+.line-content {
+  padding-left: var(--spacing-md, 16px);
+  color: var(--text-primary, #f1f5f9);
+  white-space: pre;
+}
+
+/* Basic syntax highlighting (simple token-based) */
+.language-bash .token-comment { color: #6b7280; }
+.language-bash .token-string { color: #10b981; }
+.language-bash .token-variable { color: #f59e0b; }
+.language-bash .token-flag { color: #818cf8; }
+
+.language-javascript .token-keyword { color: #ec4899; }
+.language-javascript .token-function { color: #818cf8; }
+.language-javascript .token-string { color: #10b981; }
+.language-javascript .token-number { color: #f59e0b; }
+.language-javascript .token-comment { color: #6b7280; }
+
+.language-python .token-keyword { color: #ec4899; }
+.language-python .token-function { color: #818cf8; }
+.language-python .token-string { color: #10b981; }
+.language-python .token-number { color: #f59e0b; }
+.language-python .token-comment { color: #6b7280; }
+
+.language-json .json-key { color: #818cf8; }
+.language-json .json-string { color: #10b981; }
+.language-json .json-number { color: #f59e0b; }
+.language-json .json-boolean { color: #ec4899; }
+.language-json .json-null { color: #6b7280; }
+
+/* Scrollbar styling */
+.code-block-pre::-webkit-scrollbar {
+  height: 8px;
+}
+
+.code-block-pre::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.code-block-pre::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.code-block-pre::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .code-block-pre {
+    padding: var(--spacing-sm, 8px);
+  }
+
+  .code-block-code {
+    font-size: 0.8rem;
+  }
+}

@@ -4,12 +4,17 @@ import { ServerEntry, getServerBySlug, buildProxyUrl, getServerMetrics, ServerMe
 import { useX402Payment } from "../hooks/useX402Payment";
 import { Spinner } from "../components/Spinner";
 import { Tooltip } from "../components/Tooltip";
+import { CodeBlock } from "../components/CodeBlock";
+import { Breadcrumb } from "../components/Breadcrumb";
+import { Skeleton } from "../components/Skeleton";
+import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import "./APIDetailsPage.css";
 
 export function APIDetailsPage() {
   const { serverSlug } = useParams<{ serverSlug: string }>();
   const navigate = useNavigate();
   const { callAPIWithPayment, isProcessing, isReady, account } = useX402Payment();
+  const { copy, copied } = useCopyToClipboard();
 
   const [server, setServer] = useState<ServerEntry | null>(null);
   const [loading, setLoading] = useState(true);
@@ -218,8 +223,27 @@ export function APIDetailsPage() {
   if (loading) {
     return (
       <div className="api-details-page">
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '500px' }}>
-          <Spinner size="large" label="Loading API details..." />
+        <Skeleton variant="rectangular" width={120} height={40} style={{ marginBottom: '16px' }} />
+
+        <div className="api-header" style={{ marginBottom: '28px' }}>
+          <Skeleton variant="rectangular" width="60%" height={40} style={{ marginBottom: '16px' }} />
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <Skeleton variant="rectangular" width={150} height={80} />
+            <Skeleton variant="rectangular" width={150} height={80} />
+          </div>
+        </div>
+
+        <div className="info-card" style={{ marginBottom: '28px' }}>
+          <Skeleton variant="text" width="30%" height={24} style={{ marginBottom: '16px' }} />
+          <Skeleton variant="text" width="100%" />
+          <Skeleton variant="text" width="80%" />
+        </div>
+
+        <div className="info-card">
+          <Skeleton variant="text" width="30%" height={24} style={{ marginBottom: '16px' }} />
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} variant="rectangular" height={80} style={{ marginBottom: '12px' }} />
+          ))}
         </div>
       </div>
     );
@@ -247,6 +271,13 @@ export function APIDetailsPage() {
       <button className="back-button" onClick={() => navigate("/")}>
         ← Back to Launchpad
       </button>
+
+      <Breadcrumb
+        items={[
+          { label: 'Marketplace', path: '/marketplace' },
+          { label: server.name }
+        ]}
+      />
 
       <div className="api-header">
         <div className="api-title-section">
@@ -373,19 +404,55 @@ export function APIDetailsPage() {
           <div className="info-grid">
             <div className="info-item">
               <span className="info-label">Server Slug:</span>
-              <span className="info-value slug-value">{server.slug}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="info-value slug-value">{server.slug}</span>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => copy(server.slug)}
+                  style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                >
+                  {copied ? '✓' : 'Copy'}
+                </button>
+              </div>
             </div>
             <div className="info-item">
               <span className="info-label">Token Address:</span>
-              <span className="info-value">{server.id}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="info-value">{server.id}</span>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => copy(server.id)}
+                  style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                >
+                  {copied ? '✓' : 'Copy'}
+                </button>
+              </div>
             </div>
             <div className="info-item">
               <span className="info-label">Builder Address:</span>
-              <span className="info-value">{server.builder}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="info-value">{server.builder}</span>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => copy(server.builder)}
+                  style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                >
+                  {copied ? '✓' : 'Copy'}
+                </button>
+              </div>
             </div>
             <div className="info-item">
               <span className="info-label">Payment Token:</span>
-              <span className="info-value">{server.paymentToken}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="info-value">{server.paymentToken}</span>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => copy(server.paymentToken)}
+                  style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                >
+                  {copied ? '✓' : 'Copy'}
+                </button>
+              </div>
             </div>
             <div className="info-item">
               <span className="info-label">Total Usage:</span>
@@ -410,7 +477,20 @@ export function APIDetailsPage() {
                   onClick={() => setSelectedApiSlug(apiItem.slug)}
                 >
                   <div className="api-item-header">
-                    <span className="api-slug-badge">/{server.slug}/{apiItem.slug}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                      <span className="api-slug-badge">/{server.slug}/{apiItem.slug}</span>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copy(buildProxyUrl(server.slug, apiItem.slug));
+                        }}
+                        style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                        title="Copy full API URL"
+                      >
+                        {copied ? '✓' : '📋'}
+                      </button>
+                    </div>
                     <span className="api-name">{apiItem.name}</span>
                     <span className="api-fee">{formatFee(apiItem.fee)}</span>
                     {selectedApiSlug === apiItem.slug && <span className="selected-badge">✓ Selected</span>}
@@ -436,6 +516,114 @@ export function APIDetailsPage() {
           </div>
         )}
       </div>
+
+      {/* API Documentation Section */}
+      {selectedApi && (
+        <div className="api-documentation-section">
+          <div className="documentation-card">
+            <div className="flex-between" style={{ marginBottom: '24px' }}>
+              <h3>📚 How to Use This API</h3>
+              <button
+                className="btn btn-secondary"
+                onClick={() => copy(buildProxyUrl(server.slug, selectedApi.slug))}
+                style={{ padding: '8px 16px', fontSize: '0.875rem' }}
+              >
+                {copied ? '✓ Copied URL' : 'Copy API URL'}
+              </button>
+            </div>
+
+            <div className="api-url-display">
+              <strong>Endpoint:</strong>
+              <code>{buildProxyUrl(server.slug, selectedApi.slug)}</code>
+            </div>
+
+            <div className="code-examples-tabs">
+              <h4>Code Examples</h4>
+
+              <div className="code-example-section">
+                <h5>cURL</h5>
+                <CodeBlock
+                  language="bash"
+                  code={`curl -X GET "${buildProxyUrl(server.slug, selectedApi.slug)}" \\
+  -H "PAYMENT-SIGNATURE: <base64_payment_proof>"
+
+# With query parameters:
+curl -X GET "${buildProxyUrl(server.slug, selectedApi.slug)}?page=1&limit=10" \\
+  -H "PAYMENT-SIGNATURE: <base64_payment_proof>"`}
+                />
+              </div>
+
+              <div className="code-example-section">
+                <h5>JavaScript (with x402 Payment)</h5>
+                <CodeBlock
+                  language="javascript"
+                  code={`import { callAPIWithPayment } from './useX402Payment';
+
+// Call API with automatic payment
+const result = await callAPIWithPayment(
+  "${buildProxyUrl(server.slug, selectedApi.slug)}",
+  BigInt("${selectedApi.fee}"),
+  "${server.id}"
+);
+
+console.log(result);`}
+                />
+              </div>
+
+              <div className="code-example-section">
+                <h5>Python</h5>
+                <CodeBlock
+                  language="python"
+                  code={`import requests
+
+# Prepare payment signature (see x402 docs)
+payment_signature = "<base64_payment_proof>"
+
+response = requests.get(
+    "${buildProxyUrl(server.slug, selectedApi.slug)}",
+    headers={"PAYMENT-SIGNATURE": payment_signature}
+)
+
+data = response.json()
+print(data)`}
+                />
+              </div>
+            </div>
+
+            {selectedApi.description && (
+              <div className="api-description-box">
+                <h4>Description</h4>
+                <p>{selectedApi.description}</p>
+              </div>
+            )}
+
+            <div className="api-pricing-info">
+              <h4>Pricing & Incentives</h4>
+              <div className="pricing-grid">
+                <div className="pricing-item">
+                  <span className="pricing-label">Cost per call:</span>
+                  <span className="pricing-value">{formatFee(selectedApi.fee)}</span>
+                </div>
+                {metrics?.apisWithTokenAmounts && (() => {
+                  const apiWithTokens = metrics.apisWithTokenAmounts.find(a => a.slug === selectedApi.slug);
+                  const tokenAmount = apiWithTokens?.tokensPerCall ? formatTokenAmount(apiWithTokens.tokensPerCall) : null;
+                  if (tokenAmount) {
+                    return (
+                      <div className="pricing-item">
+                        <span className="pricing-label">Tokens earned:</span>
+                        <span className="pricing-value" style={{ color: '#4ade80' }}>
+                          {tokenAmount} {server.symbol}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="api-test-section">
         <div className="test-card">

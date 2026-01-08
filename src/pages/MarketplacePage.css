@@ -235,6 +235,34 @@
   color: var(--text-primary, #f1f5f9);
 }
 
+.favorites-filter-btn {
+  padding: 10px 16px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: var(--bg-card, #12121a);
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.favorites-filter-btn:hover {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--text-primary, #f1f5f9);
+}
+
+.favorites-filter-btn.active {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
 .view-toggle {
   display: inline-flex;
   border: 1px solid rgba(255, 255, 255, 0.15);

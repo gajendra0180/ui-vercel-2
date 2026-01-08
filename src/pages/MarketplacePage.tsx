@@ -1,9 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useActiveAccount } from "thirdweb/react";
 import { getAllServers, ServerEntry } from "../utils/api";
 import { APICard } from "../components/APICard";
 import { Spinner } from "../components/Spinner";
+import { SkeletonCard } from "../components/Skeleton";
 import { useDebounce } from "../hooks/useDebounce";
+import { useFavorites } from "../hooks/useFavorites";
 import "./MarketplacePage.css";
 
 type SortOption = "trending" | "newest" | "price-low" | "price-high";
@@ -103,6 +106,7 @@ const formatUSDC = (fee: string) => {
 
 export function MarketplacePage() {
   const navigate = useNavigate();
+  const account = useActiveAccount();
   const [searchParams, setSearchParams] = useSearchParams();
   const [servers, setServers] = useState<ServerEntry[]>([]);
   const [filteredServers, setFilteredServers] = useState<ServerEntry[]>([]);
@@ -115,6 +119,8 @@ export function MarketplacePage() {
     searchParams.get("category") || "all"
   );
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const { favorites, isFavorite, toggleFavorite } = useFavorites(account?.address);
 
   useEffect(() => {
     loadServers();
@@ -193,6 +199,11 @@ export function MarketplacePage() {
       });
     }
 
+    // Filter by favorites
+    if (showFavoritesOnly) {
+      filtered = filtered.filter((server) => isFavorite(server.id));
+    }
+
     // Sort by selected option
     filtered.sort((a, b) => {
       switch (sortBy) {
@@ -235,7 +246,7 @@ export function MarketplacePage() {
     });
 
     return filtered;
-  }, [servers, debouncedSearchQuery, sortBy, priceFilter, selectedCategory]);
+  }, [servers, debouncedSearchQuery, sortBy, priceFilter, selectedCategory, showFavoritesOnly, isFavorite]);
 
   // Update filtered servers when memoized results change
   useEffect(() => {
@@ -258,8 +269,14 @@ export function MarketplacePage() {
   if (loading) {
     return (
       <div className="marketplace-page">
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '600px' }}>
-          <Spinner size="large" label="Loading API servers..." />
+        <div className="marketplace-header">
+          <h1 className="hero-title">API Marketplace</h1>
+          <p className="hero-subtitle">Discover and connect to monetized APIs</p>
+        </div>
+        <div className="card-grid">
+          {[...Array(6)].map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
       </div>
     );
@@ -375,6 +392,17 @@ export function MarketplacePage() {
             </select>
           </div>
 
+          {account && favorites.size > 0 && (
+            <button
+              className={`favorites-filter-btn ${showFavoritesOnly ? 'active' : ''}`}
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              aria-label={showFavoritesOnly ? 'Show all servers' : 'Show favorites only'}
+              title={showFavoritesOnly ? 'Show all servers' : 'Show favorites only'}
+            >
+              {showFavoritesOnly ? '❤️' : '🤍'} Favorites {showFavoritesOnly && `(${favorites.size})`}
+            </button>
+          )}
+
           <div className="view-toggle">
             <button
               className={viewMode === "grid" ? "active" : ""}
@@ -438,6 +466,8 @@ export function MarketplacePage() {
                 onViewDetails={() => handleViewDetails(server.slug)}
                 onTryServer={() => handleTryServer(server.slug)}
                 variant={viewMode}
+                isFavorite={isFavorite(server.id)}
+                onToggleFavorite={() => toggleFavorite(server.id)}
               />
             ))}
           </div>

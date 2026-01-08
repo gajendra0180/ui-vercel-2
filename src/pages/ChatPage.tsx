@@ -16,6 +16,7 @@ import {
 } from "../utils/api";
 import { useX402Payment } from "../hooks/useX402Payment";
 import { Spinner } from "../components/Spinner";
+import { Breadcrumb } from "../components/Breadcrumb";
 import "./ChatPage.css";
 
 interface DisplayMessage extends ChatMessage {
@@ -618,6 +619,12 @@ export function ChatPage() {
             >
               ← Back to Agents
             </button>
+            <Breadcrumb
+              items={[
+                { label: 'Chat', path: '/chat' },
+                { label: selectedAgent.name }
+              ]}
+            />
             <div className="agent-info">
               <h2>{selectedAgent.name}</h2>
               <p>{selectedAgent.description}</p>
@@ -674,12 +681,20 @@ export function ChatPage() {
                 {/* Render payment button if present */}
                 {msg.paymentButton && (
                   <button
-                    className="btn btn-primary payment-button"
+                    className={`payment-button ${isProcessing ? 'payment-button-processing' : ''}`}
                     onClick={() => handlePaymentButtonClick(msg.paymentButton!)}
                     disabled={streaming || isProcessing}
                     aria-label={`Pay ${msg.paymentButton.displayFee} to call ${msg.paymentButton.toolDisplayName}`}
                   >
-                    💳 Pay {msg.paymentButton.displayFee} → {msg.paymentButton.toolDisplayName}
+                    <div className="payment-button-content">
+                      <span className="payment-button-label">
+                        {isProcessing ? 'Processing payment...' : msg.paymentButton.toolDisplayName}
+                      </span>
+                      <span className="payment-button-cost">{msg.paymentButton.displayFee}</span>
+                    </div>
+                    <span style={{ fontSize: '24px' }}>
+                      {isProcessing ? '⏳' : '💳'}
+                    </span>
                   </button>
                 )}
 
