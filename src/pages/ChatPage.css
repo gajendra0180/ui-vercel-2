@@ -23,6 +23,7 @@
 /* Chat with sidebar layout */
 .chat-page--with-sidebar {
   flex-direction: row;
+  overflow: hidden;
 }
 
 .chat-page--with-sidebar .chat-main {
@@ -31,6 +32,8 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  overflow-y: auto;
+  margin-left: 260px; /* Account for fixed sidebar */
 }
 
 /* ===== Chat Header (agent info bar) ===== */
