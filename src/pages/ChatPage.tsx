@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useActiveAccount } from "thirdweb/react";
 import {
   getAllAgents,
+  getAgent,
   getAllServers,
   createChatSession,
   getUserChatSessions,
@@ -181,6 +182,14 @@ export function ChatPage() {
       setError(null);
       setMessages([]);
 
+      // Refresh agent data to get latest tools
+      const freshAgent = await getAgent(selectedAgent.id);
+      if (freshAgent) {
+        setSelectedAgent(freshAgent);
+        setSelectedTools(freshAgent.availableTools);
+        setSelectedModel(freshAgent.llmProvider === "gpt" ? "gpt-4" : freshAgent.llmProvider as LLMModel);
+      }
+
       // Find the session in history
       const targetSession = chatHistory.find(s => s.id === chatId);
       if (!targetSession) {
@@ -246,6 +255,14 @@ export function ChatPage() {
       setTotalCost("0");
       setToolCalls([]);
       setError(null);
+
+      // Refresh agent data to get latest tools
+      const freshAgent = await getAgent(selectedAgent.id);
+      if (freshAgent) {
+        setSelectedAgent(freshAgent);
+        setSelectedTools(freshAgent.availableTools);
+        setSelectedModel(freshAgent.llmProvider === "gpt" ? "gpt-4" : freshAgent.llmProvider as LLMModel);
+      }
 
       // Force create a new session
       const result = await createChatSession({
