@@ -297,10 +297,12 @@ export function ChatPage() {
       };
       setMessages((prev) => [...prev, userDisplayMessage]);
 
-      // Send message to backend
+      // Send message to backend with current tool and model selections
       const sendResult = await sendChatMessage({
         sessionId: session.id,
         content: userMessage,
+        tools: selectedTools,
+        model: selectedModel,
       });
 
       if (!sendResult.success) {
@@ -308,7 +310,7 @@ export function ChatPage() {
         return;
       }
 
-      // Start streaming response
+      // Start streaming response with current tool and model selections
       setStreaming(true);
       let assistantContent = "";
 
@@ -405,7 +407,8 @@ export function ChatPage() {
         },
         () => {
           setStreaming(false);
-        }
+        },
+        { tools: selectedTools, model: selectedModel }
       );
 
       streamCleanupRef.current = cleanup;
@@ -413,7 +416,7 @@ export function ChatPage() {
       setError(err.message || "Failed to send message");
       setStreaming(false);
     }
-  }, [messageInput, session, streaming]);
+  }, [messageInput, session, streaming, selectedTools, selectedModel]);
 
   const handleKeyPress = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

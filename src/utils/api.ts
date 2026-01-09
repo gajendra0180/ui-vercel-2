@@ -729,6 +729,8 @@ export async function getUserChatSessions(
 export async function sendChatMessage(data: {
   sessionId: string;
   content: string;
+  tools?: string[];  // Optional tool overrides (format: "serverSlug/apiSlug")
+  model?: string;    // Optional model override
 }): Promise<{ success: boolean; message?: ChatMessage; error?: string }> {
   try {
     const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
@@ -914,10 +916,28 @@ export async function createChatStreamListener(
   sessionId: string,
   onEvent: (event: SSEEvent) => void,
   onError: (error: Error) => void,
-  onComplete: () => void
+  onComplete: () => void,
+  options?: {
+    tools?: string[];  // Tool overrides (format: "serverSlug/apiSlug")
+    model?: string;    // Model override
+  }
 ): Promise<() => void> {
   const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-  const eventSource = new EventSource(`${baseUrl}/api/chat/stream/${sessionId}`);
+
+  // Build URL with optional query params for tool/model overrides
+  let streamUrl = `${baseUrl}/api/chat/stream/${sessionId}`;
+  const params = new URLSearchParams();
+  if (options?.tools && options.tools.length > 0) {
+    params.set('tools', options.tools.join(','));
+  }
+  if (options?.model) {
+    params.set('model', options.model);
+  }
+  if (params.toString()) {
+    streamUrl += `?${params.toString()}`;
+  }
+
+  const eventSource = new EventSource(streamUrl);
 
   const handleMessage = (event: Event) => {
     try {
