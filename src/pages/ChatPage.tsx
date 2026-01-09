@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useActiveAccount } from "thirdweb/react";
 import {
   getAllAgents,
+  getAgent,
   getAllServers,
   createChatSession,
   getUserChatSessions,
@@ -181,6 +182,14 @@ export function ChatPage() {
       setError(null);
       setMessages([]);
 
+      // Refresh agent data to get latest tools
+      const freshAgent = await getAgent(selectedAgent.id);
+      if (freshAgent) {
+        setSelectedAgent(freshAgent);
+        setSelectedTools(freshAgent.availableTools);
+        setSelectedModel(freshAgent.llmProvider === "gpt" ? "gpt-4" : freshAgent.llmProvider as LLMModel);
+      }
+
       // Find the session in history
       const targetSession = chatHistory.find(s => s.id === chatId);
       if (!targetSession) {
@@ -247,6 +256,14 @@ export function ChatPage() {
       setToolCalls([]);
       setError(null);
 
+      // Refresh agent data to get latest tools
+      const freshAgent = await getAgent(selectedAgent.id);
+      if (freshAgent) {
+        setSelectedAgent(freshAgent);
+        setSelectedTools(freshAgent.availableTools);
+        setSelectedModel(freshAgent.llmProvider === "gpt" ? "gpt-4" : freshAgent.llmProvider as LLMModel);
+      }
+
       // Force create a new session
       const result = await createChatSession({
         agentId: selectedAgent.id,
@@ -279,13 +296,34 @@ export function ChatPage() {
   };
 
   const handleSendMessage = useCallback(async () => {
-    if (!messageInput.trim() || !session || streaming) {
+    if (!messageInput.trim() || !session || streaming || !selectedAgent) {
       return;
     }
 
     const userMessage = messageInput.trim();
     setMessageInput("");
     setError(null);
+
+    // Refresh agent data to get latest tools before sending
+    let currentTools = selectedTools;
+    let currentModel = selectedModel;
+    try {
+      const freshAgent = await getAgent(selectedAgent.id);
+      if (freshAgent) {
+        // Check if tools changed
+        const toolsChanged = JSON.stringify(freshAgent.availableTools.sort()) !== JSON.stringify(selectedTools.sort());
+        if (toolsChanged) {
+          console.log("Agent tools changed, updating...");
+          setSelectedAgent(freshAgent);
+          setSelectedTools(freshAgent.availableTools);
+          setSelectedModel(freshAgent.llmProvider === "gpt" ? "gpt-4" : freshAgent.llmProvider as LLMModel);
+          currentTools = freshAgent.availableTools;
+          currentModel = freshAgent.llmProvider === "gpt" ? "gpt-4" : freshAgent.llmProvider as LLMModel;
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to refresh agent data:", err);
+    }
 
     try {
       // Add user message to display
@@ -297,12 +335,12 @@ export function ChatPage() {
       };
       setMessages((prev) => [...prev, userDisplayMessage]);
 
-      // Send message to backend with current tool and model selections
+      // Send message to backend with current tool and model selections (using fresh data)
       const sendResult = await sendChatMessage({
         sessionId: session.id,
         content: userMessage,
-        tools: selectedTools,
-        model: selectedModel,
+        tools: currentTools,
+        model: currentModel,
       });
 
       if (!sendResult.success) {
