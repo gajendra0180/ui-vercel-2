@@ -8,7 +8,7 @@ import { baseSepolia as baseSepoliaViem } from "viem/chains";
 import { TOKEN_FACTORY_ADDRESS, TOKEN_FACTORY_ABI } from "../contracts/tokenFactory";
 import { USDC_ADDRESS } from "../constants/addresses";
 import { thirdwebClient } from "../lib/thirdwebClient";
-import { getAllServers, ServerEntry, checkServerSlugExists } from "../utils/api";
+import { checkServerSlugExists } from "../utils/api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Tooltip } from "../components/Tooltip";
 import "./SubmitAPIForm.css";
@@ -69,35 +69,6 @@ export function SubmitAPIForm() {
   const chain = useActiveWalletChain();
   const { mutate: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
   
-  // Check if builder already has a server
-  const [existingServer, setExistingServer] = useState<ServerEntry | null>(null);
-  const [checkingExisting, setCheckingExisting] = useState(true);
-  
-  // Check if builder already has a registered server
-  useEffect(() => {
-    const checkExistingServer = async () => {
-      if (!account) {
-        setCheckingExisting(false);
-        return;
-      }
-      
-      try {
-        setCheckingExisting(true);
-        const allServers = await getAllServers();
-        const builderServer = allServers.find(
-          (server) => server.builder.toLowerCase() === account.address.toLowerCase()
-        );
-        setExistingServer(builderServer || null);
-      } catch (error) {
-        console.error("Error checking existing server:", error);
-      } finally {
-        setCheckingExisting(false);
-      }
-    };
-    
-    checkExistingServer();
-  }, [account]);
-
   // API entry for the form
   interface FormApiEntry {
     slug: string;
@@ -585,68 +556,6 @@ export function SubmitAPIForm() {
             <ConnectButton client={thirdwebClient} chain={baseSepolia} />
           </div>
           <p className="connect-hint">Click the button above to connect your wallet (Rabbit, MetaMask, etc.)</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show loading while checking for existing server
-  if (checkingExisting) {
-    return (
-      <div className="submit-page">
-        <div className="connect-prompt">
-          <h2>🔍 Checking...</h2>
-          <p>Verifying if you already have an active server...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // If builder already has a server, show message and redirect to dashboard
-  if (existingServer) {
-    return (
-      <div className="submit-page">
-        <div className="existing-token-notice">
-          <h2>🖥️ You Already Have an Active Server</h2>
-          <p>Each account can only register one server.</p>
-          
-          <div className="existing-token-info">
-            <div className="token-info-row">
-              <span className="label">Server Name:</span>
-              <span className="value">{existingServer.name}</span>
-            </div>
-            <div className="token-info-row">
-              <span className="label">Server Slug:</span>
-              <span className="value">{existingServer.slug}</span>
-            </div>
-            <div className="token-info-row">
-              <span className="label">Symbol:</span>
-              <span className="value">{existingServer.symbol}</span>
-            </div>
-            <div className="token-info-row">
-              <span className="label">APIs Registered:</span>
-              <span className="value">{existingServer.apiCount || existingServer.apis?.length || 1}</span>
-            </div>
-          </div>
-          
-          <p className="info-text">
-            Want to add more APIs? Go to your Dashboard to add APIs to your existing server.
-          </p>
-          
-          <div className="action-buttons">
-            <button 
-              className="btn btn-primary"
-              onClick={() => navigate("/dashboard")}
-            >
-              📊 Go to Dashboard
-            </button>
-            <button 
-              className="btn btn-secondary"
-              onClick={() => navigate(`/server/${existingServer.slug}`)}
-            >
-              🔍 View Server Details
-            </button>
-          </div>
         </div>
       </div>
     );
