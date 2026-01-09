@@ -138,8 +138,9 @@ export const NewChatPlayground: React.FC = () => {
       }));
 
       // Call playground API
+      const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'}/api/chat/playground`,
+        `${apiBaseUrl}/api/chat/playground`,
         {
           method: 'POST',
           headers: {
