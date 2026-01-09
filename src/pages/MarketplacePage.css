@@ -83,6 +83,17 @@
   transform: translateY(-1px);
 }
 
+/* Chain Filter in Hero */
+.chain-filter-hero {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.chain-filter-hero .chain-selector {
+  justify-content: center;
+}
+
 /* Categories Navigation */
 .categories-nav {
   margin-bottom: 24px;

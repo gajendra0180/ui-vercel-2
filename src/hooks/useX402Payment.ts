@@ -1,11 +1,11 @@
-// x402 payment hook using user's connected wallet to sign payment proofs
+// x402 payment hook supporting both EVM (Base Sepolia) and Solana payments
 import { useState } from "react";
 import { useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { baseSepolia } from "thirdweb/chains";
 import { USDC_ADDRESS } from "../constants/addresses";
 
 /**
- * Payment authorization for EIP-3009 transfers
+ * Payment authorization for EIP-3009 transfers (EVM)
  */
 export interface PaymentAuthorization {
   from: string;
@@ -33,6 +33,11 @@ export interface PaymentState {
   error: string | null;
 }
 
+/**
+ * Chain type for payment routing
+ */
+export type ChainType = "evm" | "solana";
+
 export function useX402Payment() {
   const account = useActiveAccount();
   const wallet = useActiveWallet();
@@ -40,15 +45,190 @@ export function useX402Payment() {
   const [error, setError] = useState<string | null>(null);
 
   /**
+   * Sign EVM payment authorization (EIP-3009/EIP-712)
+   */
+  const signEVMPayment = async (
+    payTo: string,
+    paymentAsset: string,
+    amountValue: string,
+    x402Version: number
+  ) => {
+    if (!account || !wallet) {
+      throw new Error("EVM wallet not connected");
+    }
+
+    // Generate EIP-3009 authorization parameters
+    const validAfter = Math.floor(Date.now() / 1000) - 60;
+    const validBefore = validAfter + 3600;
+    const nonceArray = new Uint8Array(32);
+    crypto.getRandomValues(nonceArray);
+    const nonceBytes32 = `0x${Array.from(nonceArray).map(b => b.toString(16).padStart(2, '0')).join('')}` as `0x${string}`;
+
+    // EIP-712 domain for USDC on Base Sepolia
+    const domain = {
+      name: "USDC",
+      version: "2",
+      chainId: baseSepolia.id,
+      verifyingContract: paymentAsset as `0x${string}`,
+    };
+
+    const types = {
+      EIP712Domain: [
+        { name: "name", type: "string" },
+        { name: "version", type: "string" },
+        { name: "chainId", type: "uint256" },
+        { name: "verifyingContract", type: "address" },
+      ],
+      TransferWithAuthorization: [
+        { name: "from", type: "address" },
+        { name: "to", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "validAfter", type: "uint256" },
+        { name: "validBefore", type: "uint256" },
+        { name: "nonce", type: "bytes32" },
+      ],
+    };
+
+    const message = {
+      from: account.address as `0x${string}`,
+      to: payTo as `0x${string}`,
+      value: amountValue,
+      validAfter: validAfter.toString(),
+      validBefore: validBefore.toString(),
+      nonce: nonceBytes32,
+    };
+
+    // Get wallet provider
+    let provider: any = null;
+    if (typeof window !== 'undefined' && (window as any).ethereum) {
+      provider = (window as any).ethereum;
+    } else if (wallet) {
+      try {
+        if ((wallet as any).getAccount) {
+          provider = await (wallet as any).getAccount();
+        } else if ((wallet as any).provider) {
+          provider = (wallet as any).provider;
+        } else if ((wallet as any).getProvider) {
+          provider = await (wallet as any).getProvider();
+        }
+      } catch (err) {
+        console.error("Error getting wallet provider:", err);
+      }
+    }
+
+    if (!provider || typeof provider.request !== 'function') {
+      throw new Error("Unable to access EVM wallet provider for signing");
+    }
+
+    // Sign typed data
+    const typedData = {
+      domain,
+      types,
+      primaryType: "TransferWithAuthorization",
+      message,
+    };
+
+    const signature = await provider.request({
+      method: "eth_signTypedData_v4",
+      params: [
+        account.address,
+        JSON.stringify(typedData),
+      ],
+    }) as string;
+
+    // Create payment proof
+    return {
+      x402Version,
+      scheme: "exact",
+      network: `eip155:${baseSepolia.id}`,
+      payload: {
+        signature,
+        authorization: {
+          from: account.address,
+          to: payTo,
+          value: amountValue,
+          validAfter: validAfter.toString(),
+          validBefore: validBefore.toString(),
+          nonce: nonceBytes32,
+        },
+      },
+    };
+  };
+
+  /**
+   * Sign Solana payment authorization
+   * Uses Ed25519 message signing via Phantom or other Solana wallets
+   */
+  const signSolanaPayment = async (
+    payTo: string,
+    amountValue: string,
+    x402Version: number
+  ) => {
+    // Check for Solana wallet (Phantom, Solflare, etc.)
+    const solana = (window as any).solana || (window as any).phantom?.solana;
+
+    if (!solana || !solana.isConnected) {
+      throw new Error("Solana wallet not connected. Please connect Phantom or another Solana wallet.");
+    }
+
+    // Generate authorization parameters
+    const validAfter = Math.floor(Date.now() / 1000) - 60;
+    const validBefore = validAfter + 3600;
+    const nonceArray = new Uint8Array(32);
+    crypto.getRandomValues(nonceArray);
+    // Convert to base58-like string for Solana
+    const nonceBase58 = btoa(String.fromCharCode(...nonceArray)).replace(/[+/=]/g, '');
+
+    // Create authorization message
+    const authorization = {
+      from: solana.publicKey.toString(),
+      to: payTo,
+      amount: amountValue,
+      validAfter,
+      validBefore,
+      nonce: nonceBase58,
+    };
+
+    // Create message to sign
+    const messageText = JSON.stringify({
+      type: "x402-payment",
+      version: x402Version,
+      ...authorization,
+    });
+
+    const messageBytes = new TextEncoder().encode(messageText);
+
+    console.log("Requesting Solana wallet to sign payment authorization...");
+
+    // Sign with Solana wallet
+    const { signature } = await solana.signMessage(messageBytes, "utf8");
+
+    // Convert signature to base64
+    const signatureBase64 = btoa(String.fromCharCode(...signature));
+
+    // Create payment proof
+    return {
+      x402Version,
+      scheme: "exact",
+      network: "solana:devnet",
+      payload: {
+        signature: signatureBase64,
+        authorization,
+      },
+    };
+  };
+
+  /**
    * Make a payment-protected API call
-   * Flow: Get 402 -> Sign EIP-3009 authorization -> Facilitator processes payment -> Send authorization in PAYMENT-SIGNATURE header (x402 V2)
+   * Automatically detects chain type from 402 response and uses appropriate signing method
    */
   const callAPIWithPayment = async (
     apiUrl: string,
     fee: bigint,
-    receiverAddress: string
+    receiverAddress: string,
+    chainType?: ChainType // Optional: pre-specify chain type
   ): Promise<unknown> => {
-    if (!account || !wallet) {
+    if (!account && !chainType) {
       throw new Error("Please connect your wallet first");
     }
 
@@ -67,157 +247,51 @@ export function useX402Payment() {
 
       // Step 2: If payment is required (402 status), handle payment flow
       if (initialResponse.status === 402) {
-        console.log("Payment required. Signing authorization for facilitator...");
-        
+        console.log("Payment required. Processing payment...");
+
         // Get payment details from 402 response
         const paymentInfo = await initialResponse.json().catch(() => ({}));
         console.log("Payment info from 402 response:", paymentInfo);
+
         const paymentRequirements = paymentInfo?.accepts?.[0];
-        const scheme = paymentRequirements?.scheme ?? "exact";
-        const network = paymentRequirements?.network ?? "base";
-        const payTo = (paymentRequirements?.payTo ?? receiverAddress) as `0x${string}`;
-        const paymentAsset = (paymentRequirements?.asset ?? USDC_ADDRESS) as `0x${string}`;
+        const network = paymentRequirements?.network ?? "eip155:84532";
+        const payTo = paymentRequirements?.payTo ?? receiverAddress;
+        const paymentAsset = paymentRequirements?.asset ?? USDC_ADDRESS;
         const amountValue = paymentRequirements?.maxAmountRequired ?? fee.toString();
-        const x402Version = paymentInfo?.x402Version ?? 1;
+        const x402Version = paymentInfo?.x402Version ?? 2;
+        const detectedChainType = paymentInfo?.chainType ?? (network.startsWith("solana") ? "solana" : "evm");
 
-        // Step 3: Generate EIP-3009 authorization parameters
-        // Set validAfter to current time minus 60 seconds to account for clock skew and block time
-        // The contract requires validAfter <= block.timestamp, so we set it slightly in the past
-        const validAfter = Math.floor(Date.now() / 1000) - 60; // 60 seconds in the past to account for clock skew
-        const validBefore = validAfter + 3600; // 1 hour validity
-        // Generate random nonce (bytes32)
-        const nonceArray = new Uint8Array(32);
-        crypto.getRandomValues(nonceArray);
-        const nonceBytes32 = `0x${Array.from(nonceArray).map(b => b.toString(16).padStart(2, '0')).join('')}` as `0x${string}`;
+        // Use provided chainType or detect from response
+        const effectiveChainType = chainType || detectedChainType;
 
-        // Step 4: User signs the EIP-3009 authorization (facilitator will use this)
-        // Note: USDC on Base Sepolia uses "USDC" as the EIP-712 domain name, not "USD Coin"
-        const domain = {
-          name: "USDC",
-          version: "2",
-          chainId: baseSepolia.id,
-          verifyingContract: paymentAsset,
-        };
+        console.log(`Detected chain type: ${effectiveChainType}, network: ${network}`);
 
-        const types = {
-          EIP712Domain: [
-            { name: "name", type: "string" },
-            { name: "version", type: "string" },
-            { name: "chainId", type: "uint256" },
-            { name: "verifyingContract", type: "address" },
-          ],
-          TransferWithAuthorization: [
-            { name: "from", type: "address" },
-            { name: "to", type: "address" },
-            { name: "value", type: "uint256" },
-            { name: "validAfter", type: "uint256" },
-            { name: "validBefore", type: "uint256" },
-            { name: "nonce", type: "bytes32" },
-          ],
-        };
+        let paymentProof: any;
 
-        const message = {
-          from: account.address as `0x${string}`,
-          to: payTo,
-          value: amountValue,
-          validAfter: validAfter.toString(),
-          validBefore: validBefore.toString(),
-          nonce: nonceBytes32,
-        };
-
-        // Request signature from user's wallet
-        console.log("Requesting user to sign payment authorization...");
-        
-        // Get wallet provider
-        let provider: any = null;
-        
-        if (typeof window !== 'undefined' && (window as any).ethereum) {
-          provider = (window as any).ethereum;
-        } else if (wallet) {
-          try {
-            if ((wallet as any).getAccount) {
-              provider = await (wallet as any).getAccount();
-            } else if ((wallet as any).provider) {
-              provider = (wallet as any).provider;
-            } else if ((wallet as any).getProvider) {
-              provider = await (wallet as any).getProvider();
-            }
-          } catch (err) {
-            console.error("Error getting wallet provider:", err);
+        // Step 3: Sign payment based on chain type
+        if (effectiveChainType === "solana") {
+          console.log("Signing Solana payment authorization...");
+          paymentProof = await signSolanaPayment(payTo, amountValue, x402Version);
+        } else {
+          console.log("Signing EVM payment authorization...");
+          if (!account || !wallet) {
+            throw new Error("EVM wallet not connected");
           }
+          paymentProof = await signEVMPayment(payTo, paymentAsset, amountValue, x402Version);
         }
 
-        if (!provider || typeof provider.request !== 'function') {
-          throw new Error("Unable to access wallet provider for signing. Please make sure your wallet is connected.");
-        }
+        console.log("Payment authorization signed successfully");
 
-        // Sign typed data
-        const typedData = {
-          domain,
-          types,
-          primaryType: "TransferWithAuthorization",
-          message,
-        };
-        
-        const signature = await provider.request({
-          method: "eth_signTypedData_v4",
-          params: [
-            account.address,
-            JSON.stringify(typedData),
-          ],
-        }) as string;
-
-        console.log("Authorization signed. Facilitator will process payment...");
-
-        // Step 5: Create payment proof from the signed authorization (x402 exact/evm format)
-        const paymentProof = {
-          x402Version,
-          scheme,
-          network,
-          payload: {
-            signature,
-            authorization: {
-              from: account.address,
-              to: payTo,
-              value: amountValue,
-              validAfter: validAfter.toString(),
-              validBefore: validBefore.toString(),
-              nonce: nonceBytes32,
-            },
-          },
-        };
-        
-        console.log("Payment proof details:", {
-          network,
-          chainId: baseSepolia.id,
-          payTo,
-          paymentAsset,
-          from: account.address,
-          domain: {
-            name: "USDC",
-            version: "2",
-            chainId: baseSepolia.id,
-            verifyingContract: paymentAsset,
-          },
-          paymentProof: {
-            network,
-            chainId: baseSepolia.id,
-            mismatch: network === "base" && baseSepolia.id === 84532 ? "⚠️ Network string 'base' but chainId is 84532 (Base Sepolia)" : "OK",
-          },
-        });
-
-        // Step 6: Wait a moment for facilitator to process payment, then retry with payment header
-        // The facilitator uses the authorization we just signed to process the payment on-chain
+        // Step 4: Wait for facilitator processing
         console.log("Waiting for facilitator to process payment...");
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds for facilitator
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Step 7: Retry API call with payment header (V2: PAYMENT-SIGNATURE, V1: X-PAYMENT)
+        // Step 5: Retry API call with payment header
         const paymentProofJson = JSON.stringify(paymentProof);
         const paymentProofBase64 = btoa(unescape(encodeURIComponent(paymentProofJson)));
-        
-        // Use V2 header if version is 2, otherwise fallback to V1 for backward compatibility
+
         const paymentHeaderName = x402Version === 2 ? "PAYMENT-SIGNATURE" : "X-PAYMENT";
-        
+
         const response = await fetch(apiUrl, {
           method: "GET",
           headers: {
@@ -233,7 +307,7 @@ export function useX402Payment() {
             if (typeof errorData === 'string') {
               errorMessage = errorData;
             } else if (errorData && typeof errorData === 'object') {
-              errorMessage = errorData.error || errorData.message || errorData.toString() || JSON.stringify(errorData);
+              errorMessage = errorData.error || errorData.message || JSON.stringify(errorData);
             }
           } catch (e) {
             errorMessage = `Payment verification failed (Status: ${response.status})`;
@@ -252,7 +326,7 @@ export function useX402Payment() {
           if (typeof errorData === 'string') {
             errorMessage = errorData;
           } else if (errorData && typeof errorData === 'object') {
-            errorMessage = errorData.error || errorData.message || errorData.toString() || JSON.stringify(errorData);
+            errorMessage = errorData.error || errorData.message || JSON.stringify(errorData);
           }
         } catch (e) {
           errorMessage = `API request failed (Status: ${initialResponse.status})`;
@@ -266,10 +340,10 @@ export function useX402Payment() {
       if (err) {
         if (typeof err === 'string') {
           errorMsg = err;
-        } else if (err.message) {
-          errorMsg = err.message;
-        } else if (err.error) {
-          errorMsg = typeof err.error === 'string' ? err.error : JSON.stringify(err.error);
+        } else if ((err as any).message) {
+          errorMsg = (err as any).message;
+        } else if ((err as any).error) {
+          errorMsg = typeof (err as any).error === 'string' ? (err as any).error : JSON.stringify((err as any).error);
         } else if (typeof err === 'object') {
           errorMsg = JSON.stringify(err);
         } else {
@@ -283,12 +357,54 @@ export function useX402Payment() {
     }
   };
 
+  /**
+   * Check if Solana wallet is available
+   */
+  const isSolanaWalletAvailable = (): boolean => {
+    const solana = (window as any).solana || (window as any).phantom?.solana;
+    return !!solana;
+  };
+
+  /**
+   * Connect Solana wallet (Phantom)
+   */
+  const connectSolanaWallet = async (): Promise<string | null> => {
+    const solana = (window as any).solana || (window as any).phantom?.solana;
+
+    if (!solana) {
+      throw new Error("Phantom wallet not found. Please install Phantom.");
+    }
+
+    try {
+      const response = await solana.connect();
+      return response.publicKey.toString();
+    } catch (err) {
+      console.error("Failed to connect Solana wallet:", err);
+      return null;
+    }
+  };
+
+  /**
+   * Get connected Solana wallet address
+   */
+  const getSolanaAddress = (): string | null => {
+    const solana = (window as any).solana || (window as any).phantom?.solana;
+    if (solana?.isConnected && solana?.publicKey) {
+      return solana.publicKey.toString();
+    }
+    return null;
+  };
+
   return {
     account,
     wallet,
     callAPIWithPayment,
     isProcessing,
     error,
-    isReady: !!account && !!wallet,
+    isReady: !!account || isSolanaWalletAvailable(),
+    // Solana-specific helpers
+    isSolanaWalletAvailable,
+    connectSolanaWallet,
+    getSolanaAddress,
   };
 }
