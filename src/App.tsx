@@ -75,11 +75,8 @@ function Navigation() {
         <Link to="/marketplace" className={isActive("/marketplace") ? "active" : ""} onClick={handleNavClick}>
           APIs
         </Link>
-        <Link to="/agent-marketplace" className={isActive("/agent-marketplace") || isActive("/chat") ? "active" : ""} onClick={handleNavClick}>
+        <Link to="/agent-marketplace" className={isActive("/agent-marketplace") || isActive("/chat") || isActive("/new-chat") ? "active" : ""} onClick={handleNavClick}>
           Agents
-        </Link>
-        <Link to="/new-chat" className={isActive("/new-chat") ? "active" : ""} onClick={handleNavClick}>
-          Playground
         </Link>
         <Link to="/submit" className={isActive("/submit") || isActive("/agents") ? "active" : ""} onClick={handleNavClick}>
           Build
