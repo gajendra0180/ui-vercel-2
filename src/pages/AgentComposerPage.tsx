@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useActiveAccount } from "thirdweb/react";
 import {
   createAgent,
@@ -9,6 +10,8 @@ import {
 } from "../utils/api";
 import { Spinner } from "../components/Spinner";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import ToolPills, { ToolInfo } from "../components/ToolPills";
+import ToolPickerModal from "../components/ToolPickerModal";
 import "./AgentComposerPage.css";
 
 /**
@@ -19,6 +22,7 @@ function isValidLLMProvider(value: unknown): value is "claude" | "gpt" | "gemini
 }
 
 export function AgentComposerPage() {
+  const navigate = useNavigate();
   const account = useActiveAccount();
 
   // Form state
@@ -41,6 +45,9 @@ export function AgentComposerPage() {
   // Confirmation dialog state
   const [showRemovePromptConfirm, setShowRemovePromptConfirm] = useState(false);
   const [promptToRemoveIndex, setPromptToRemoveIndex] = useState<number | null>(null);
+
+  // Tool picker modal state
+  const [isToolPickerOpen, setIsToolPickerOpen] = useState(false);
 
   // Load available servers and tools
   useEffect(() => {
@@ -89,24 +96,31 @@ export function AgentComposerPage() {
     setStarterPrompts(updated);
   };
 
-  const toggleTool = (toolId: string) => {
-    setSelectedTools(prev =>
-      prev.includes(toolId)
-        ? prev.filter(t => t !== toolId)
-        : [...prev, toolId]
-    );
-  };
-
-  /**
-   * Handle keyboard navigation for tool cards
-   * Space or Enter key toggles tool selection
-   */
-  const handleToolKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, toolId: string) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      toggleTool(toolId);
+  const handleToolAdd = (toolId: string) => {
+    if (!selectedTools.includes(toolId)) {
+      setSelectedTools([...selectedTools, toolId]);
     }
   };
+
+  const handleToolRemove = (toolId: string) => {
+    setSelectedTools(selectedTools.filter(t => t !== toolId));
+  };
+
+  // Get tool info for ToolPills
+  const getToolInfoList = useCallback((): ToolInfo[] => {
+    const toolList: ToolInfo[] = [];
+    for (const toolId of selectedTools) {
+      const tool = allTools.find(t => t.id === toolId);
+      if (tool) {
+        toolList.push({
+          id: tool.id,
+          name: tool.label,
+          serverName: tool.serverName,
+        });
+      }
+    }
+    return toolList;
+  }, [selectedTools, allTools]);
 
   const validateForm = (): boolean => {
     if (!agentName.trim()) {
@@ -164,7 +178,7 @@ export function AgentComposerPage() {
         setError(result.error || "Failed to create agent");
       }
     } catch (err: unknown) {
-      setError(err.message || "Failed to create agent");
+      setError(err instanceof Error ? err.message : "Failed to create agent");
     } finally {
       setCreating(false);
     }
@@ -183,8 +197,22 @@ export function AgentComposerPage() {
 
   return (
     <div className="agent-composer-page">
+      {/* Build Options Header */}
+      <div className="build-options">
+        <h1>Build on APIX</h1>
+        <p>Create APIs or AI agents for the decentralized marketplace</p>
+        <div className="build-tabs">
+          <button className="build-tab" onClick={() => navigate('/submit')}>
+            Register Server
+          </button>
+          <button className="build-tab build-tab--active">
+            Create Agent
+          </button>
+        </div>
+      </div>
+
       <div className="composer-header">
-        <h1>🤖 Agent Composer</h1>
+        <h2>🤖 Agent Composer</h2>
         <p>Create your own AI agent powered by decentralized APIs</p>
       </div>
 
@@ -336,7 +364,7 @@ export function AgentComposerPage() {
               </div>
 
               {loading ? (
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '150px' }}>
                   <Spinner size="large" label="Loading available APIs..." />
                 </div>
               ) : allTools.length === 0 ? (
@@ -344,34 +372,17 @@ export function AgentComposerPage() {
                   <p>No APIs available yet. Create some APIs in the marketplace first.</p>
                 </div>
               ) : (
-                <div className="tools-grid">
-                  {allTools.map((tool) => (
-                    <div
-                      key={tool.id}
-                      className={`tool-card ${selectedTools.includes(tool.id) ? "selected" : ""}`}
-                      onClick={() => toggleTool(tool.id)}
-                      onKeyDown={(e) => handleToolKeyDown(e, tool.id)}
-                      role="button"
-                      tabIndex={0}
-                      aria-pressed={selectedTools.includes(tool.id)}
-                      aria-label={`${tool.label} from ${tool.serverName} - ${selectedTools.includes(tool.id) ? "selected" : "not selected"}`}
-                    >
-                      <div className="tool-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={selectedTools.includes(tool.id)}
-                          onChange={() => toggleTool(tool.id)}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                      <div className="tool-content">
-                        <h4>{tool.label}</h4>
-                        <small className="tool-server">{tool.serverName}</small>
-                        <p className="tool-description">{tool.description}</p>
-                        <code className="tool-id">{tool.id}</code>
-                      </div>
+                <div className="tool-selection-area">
+                  <ToolPills
+                    tools={getToolInfoList()}
+                    onRemove={handleToolRemove}
+                    onAddClick={() => setIsToolPickerOpen(true)}
+                  />
+                  {selectedTools.length === 0 && (
+                    <div className="tool-selection-hint">
+                      <p>Click "+ Add Tool" to select APIs for your agent</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
@@ -473,6 +484,16 @@ export function AgentComposerPage() {
             setShowRemovePromptConfirm(false);
             setPromptToRemoveIndex(null);
           }}
+        />
+
+        {/* Tool Picker Modal */}
+        <ToolPickerModal
+          isOpen={isToolPickerOpen}
+          onClose={() => setIsToolPickerOpen(false)}
+          servers={servers}
+          selectedTools={selectedTools}
+          onToolAdd={handleToolAdd}
+          onToolRemove={handleToolRemove}
         />
       </div>
     </div>

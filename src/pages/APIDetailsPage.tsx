@@ -210,7 +210,7 @@ export function APIDetailsPage() {
     if (!tokens) return null;
     try {
       const tokensBigInt = BigInt(tokens);
-      const tokensNum = Number(tokensBigInt) / 1e18; // Assuming 18 decimals for IAO tokens
+      const tokensNum = Number(tokensBigInt) / 1e18; // Assuming 18 decimals for APIX tokens
       if (tokensNum < 0.01) {
         return tokensNum.toExponential(2);
       }

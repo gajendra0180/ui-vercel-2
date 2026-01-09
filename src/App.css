@@ -186,6 +186,20 @@ body {
   padding: 32px 0;
 }
 
+/* Remove padding for full-height pages like chat */
+.main-content:has(.chat-page),
+.main-content:has(.playground) {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Hide footer on chat/playground pages */
+.container:has(.chat-page) .footer,
+.container:has(.playground) .footer {
+  display: none;
+}
+
 /* ===== Buttons ===== */
 .btn {
   padding: 12px 24px;

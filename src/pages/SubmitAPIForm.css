@@ -1,3 +1,61 @@
+/* ===== Build Options Header ===== */
+.build-options {
+  text-align: center;
+  padding: 24px 0 20px;
+  margin-bottom: 8px;
+}
+
+.build-options h1 {
+  font-size: 2.2rem;
+  margin: 0 0 8px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fff 0%, #c7d2fe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.build-options > p {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 20px;
+}
+
+.build-tabs {
+  display: inline-flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.build-tab {
+  padding: 10px 24px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.build-tab:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.build-tab--active {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+}
+
+.build-tab--active:hover {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+}
+
 /* ===== Submit/Register Page ===== */
 .submit-page {
   padding: 0 24px 40px;
@@ -8,18 +66,14 @@
 .submit-header {
   text-align: center;
   margin-bottom: 36px;
-  padding-top: 20px;
   color: white;
 }
 
-.submit-header h1 {
-  font-size: 2.5rem;
-  margin-bottom: 12px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #fff 0%, #c7d2fe 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.submit-header h2 {
+  font-size: 1.8rem;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: white;
 }
 
 .submit-header p {

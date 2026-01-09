@@ -1,0 +1,102 @@
+.tool-pills {
+  width: 100%;
+  overflow: hidden;
+}
+
+.tool-pills--disabled {
+  opacity: 0.7;
+}
+
+.tool-pills__scroll-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tool-pills__scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+.tool-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 20px;
+  color: #a5b4fc;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.tool-pill:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.tool-pill__name {
+  font-weight: 500;
+}
+
+.tool-pill__fee {
+  font-size: 10px;
+  color: #888;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+
+.tool-pill__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  color: #a5b4fc;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tool-pill__remove:hover {
+  background: rgba(255, 107, 107, 0.3);
+  color: #ff6b6b;
+}
+
+.tool-pill--more {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #888;
+  cursor: default;
+}
+
+.tool-pills__add-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  color: #888;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.tool-pills__add-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #e0e0e0;
+}

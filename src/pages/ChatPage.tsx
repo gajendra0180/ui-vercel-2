@@ -2,45 +2,34 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useActiveAccount } from "thirdweb/react";
 import {
-  getAgent,
   getAllAgents,
+  getAllServers,
   createChatSession,
+  getUserChatSessions,
   sendChatMessage,
   getChatMessages,
   createChatStreamListener,
   buildProxyUrl,
   Agent,
   ChatSession,
-  ChatMessage,
+  ChatMessage as APIChatMessage,
   SSEEvent,
+  ServerEntry,
 } from "../utils/api";
 import { useX402Payment } from "../hooks/useX402Payment";
 import { Spinner } from "../components/Spinner";
-import { Breadcrumb } from "../components/Breadcrumb";
+import ChatMessage from "../components/ChatMessage";
+import ChatSidebar from "../components/ChatSidebar";
+import { ToolCallEntry } from "../components/DebugPanel";
+import ModelSelector, { LLMModel } from "../components/ModelSelector";
+import ToolPills, { ToolInfo } from "../components/ToolPills";
+import ToolPickerModal from "../components/ToolPickerModal";
 import "./ChatPage.css";
 
-interface DisplayMessage extends ChatMessage {
+interface DisplayMessage extends APIChatMessage {
   id: string;
   paymentButton?: PaymentButton;
-}
-
-interface ToolCall {
-  name: string;
-  description: string;
-}
-
-interface ToolResult {
-  toolName: string;
-  success: boolean;
-  result?: any;
-  error?: string;
-}
-
-interface Payment {
-  serverSlug: string;
-  apiSlug: string;
-  fee: string;
-  displayFee: string;
+  toolCall?: { name: string; loading?: boolean };
 }
 
 interface PaymentButton {
@@ -66,24 +55,32 @@ export function ChatPage() {
 
   // Chat session state
   const [session, setSession] = useState<ChatSession | null>(null);
+  const [chatHistory, setChatHistory] = useState<ChatSession[]>([]);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [messageInput, setMessageInput] = useState("");
 
+  // Tool and model override state
+  const [servers, setServers] = useState<ServerEntry[]>([]);
+  const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState<LLMModel>("claude");
+  const [isToolPickerOpen, setIsToolPickerOpen] = useState(false);
+
   // Streaming state
   const [streaming, setStreaming] = useState(false);
-  const [currentToolCall, setCurrentToolCall] = useState<ToolCall | null>(null);
-  const [totalCost, setTotalCost] = useState("0");
-  const [toolCalls, setToolCalls] = useState<string[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_totalCost, setTotalCost] = useState("0");
 
   // UI state
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [toolCalls, setToolCalls] = useState<ToolCallEntry[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
 
-  // Load agents on mount
+  // Load agents and servers on mount
   useEffect(() => {
     loadAgents();
+    loadServers();
   }, []);
 
   // Auto-select agent from URL parameter if present
@@ -115,6 +112,25 @@ export function ChatPage() {
     }
   };
 
+  const loadServers = async () => {
+    try {
+      const serversData = await getAllServers();
+      setServers(serversData);
+    } catch (err) {
+      console.error("Failed to load servers:", err);
+    }
+  };
+
+  const loadChatHistory = async (agentId: string) => {
+    if (!account) return;
+    try {
+      const sessions = await getUserChatSessions(account.address, agentId);
+      setChatHistory(sessions);
+    } catch (err) {
+      console.error("Failed to load chat history:", err);
+    }
+  };
+
   const startChatWithAgent = async (agent: Agent) => {
     if (!account) {
       setError("Wallet not connected");
@@ -126,7 +142,13 @@ export function ChatPage() {
       setSelectedAgent(agent);
       setMessages([]);
       setTotalCost("0");
-      setToolCalls([]);
+
+      // Set model and tools from agent defaults
+      setSelectedModel(agent.llmProvider === "gpt" ? "gpt-4" : agent.llmProvider as LLMModel);
+      setSelectedTools(agent.availableTools);
+
+      // Load chat history for this agent
+      await loadChatHistory(agent.id);
 
       // Create chat session
       const result = await createChatSession({
@@ -147,15 +169,115 @@ export function ChatPage() {
       } else {
         setError(result.error || "Failed to create chat session");
       }
-    } catch (err: unknown) {
+    } catch (err: any) {
       setError(err.message || "Failed to start chat");
     }
   };
 
-  /**
-   * Memoize message sending handler to prevent recreation on each render
-   * Dependencies: session, streaming, messageInput, and functions needed in closure
-   */
+  const switchToChat = async (chatId: string) => {
+    if (!selectedAgent) return;
+
+    try {
+      setError(null);
+      setMessages([]);
+
+      // Find the session in history
+      const targetSession = chatHistory.find(s => s.id === chatId);
+      if (!targetSession) {
+        setError("Chat session not found");
+        return;
+      }
+
+      setSession(targetSession);
+
+      // Load messages for this session
+      const existingMessages = await getChatMessages(chatId);
+      const displayMessages = existingMessages.map((msg, idx) => ({
+        ...msg,
+        id: `${idx}-${Date.now()}`,
+      }));
+      setMessages(displayMessages);
+    } catch (err: any) {
+      setError(err.message || "Failed to switch chat");
+    }
+  };
+
+  // Get tool info list for pills
+  const getToolInfoList = useCallback((): ToolInfo[] => {
+    const toolList: ToolInfo[] = [];
+    for (const toolId of selectedTools) {
+      const [serverSlug, apiSlug] = toolId.split('/');
+      const server = servers.find((s) => s.slug === serverSlug);
+      const api = server?.apis?.find((a) => a.slug === apiSlug);
+      if (server && api) {
+        toolList.push({
+          id: toolId,
+          name: api.name,
+          serverName: server.name,
+          fee: formatFee(api.fee),
+        });
+      }
+    }
+    return toolList;
+  }, [selectedTools, servers]);
+
+  const formatFee = (fee: string): string => {
+    const feeNum = parseFloat(fee) / 1_000_000;
+    return feeNum < 0.01 ? `$${feeNum.toFixed(4)}` : `$${feeNum.toFixed(2)}`;
+  };
+
+  const handleToolAdd = (toolId: string) => {
+    if (!selectedTools.includes(toolId)) {
+      setSelectedTools([...selectedTools, toolId]);
+    }
+  };
+
+  const handleToolRemove = (toolId: string) => {
+    setSelectedTools(selectedTools.filter((t) => t !== toolId));
+  };
+
+  const handleNewChat = async () => {
+    if (!selectedAgent || !account) return;
+
+    try {
+      // Reset local state
+      setSession(null);
+      setMessages([]);
+      setTotalCost("0");
+      setToolCalls([]);
+      setError(null);
+
+      // Force create a new session
+      const result = await createChatSession({
+        agentId: selectedAgent.id,
+        userAddress: account.address,
+        forceNew: true,
+      });
+
+      if (result.success && result.session) {
+        setSession(result.session);
+        // Refresh chat history to include the new session
+        await loadChatHistory(selectedAgent.id);
+      } else {
+        setError(result.error || "Failed to create new chat session");
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to start new chat");
+    }
+  };
+
+  const handleAgentChange = (agent: Agent | null) => {
+    if (agent) {
+      setSession(null);
+      setMessages([]);
+      setTotalCost("0");
+      setToolCalls([]);
+      startChatWithAgent(agent);
+    } else {
+      setSelectedAgent(null);
+    }
+  };
+
   const handleSendMessage = useCallback(async () => {
     if (!messageInput.trim() || !session || streaming) {
       return;
@@ -189,25 +311,19 @@ export function ChatPage() {
       // Start streaming response
       setStreaming(true);
       let assistantContent = "";
-      let currentPayments: Payment[] = [];
 
-      // Create SSE listener with enhanced error handling
       const cleanup = await createChatStreamListener(
         session.id,
         (event: SSEEvent) => {
           switch (event.type) {
             case "token":
-              // Add token to assistant message
               assistantContent += event.data.content;
               setMessages((prev) => {
                 const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.role === "assistant" && !lastMsg.id.startsWith("tool-")) {
+                if (lastMsg && lastMsg.role === "assistant" && !lastMsg.toolCall) {
                   return [
                     ...prev.slice(0, -1),
-                    {
-                      ...lastMsg,
-                      content: assistantContent,
-                    },
+                    { ...lastMsg, content: assistantContent },
                   ];
                 }
                 return [
@@ -223,248 +339,148 @@ export function ChatPage() {
               break;
 
             case "tool_call":
-              // Show tool being called
-              setCurrentToolCall({
-                name: event.data.name,
-                description: event.data.description,
-              });
-              setToolCalls((prev) => [...prev, event.data.name]);
-              setMessages((prev) => [
+              // Track tool call in debug panel
+              const toolCallId = `tool-${Date.now()}`;
+              setToolCalls((prev) => [
                 ...prev,
                 {
-                  id: `tool-${Date.now()}`,
-                  role: "assistant",
-                  content: `🔧 Calling ${event.data.name}...`,
+                  id: toolCallId,
+                  toolName: event.data.name as string,
+                  toolDisplayName: event.data.description as string || event.data.name as string,
+                  input: event.data.input,
+                  success: true,
                   timestamp: new Date().toISOString(),
                 },
               ]);
               break;
 
             case "tool_result":
-              // Show tool result
-              const toolResult: ToolResult = event.data;
-              if (toolResult.success) {
-                // Format result nicely - show full result if reasonable size, truncate only if very large
-                const resultStr = JSON.stringify(toolResult.result, null, 2);
-                const isTooLarge = resultStr.length > 1000;
-                const displayResult = isTooLarge ? resultStr.substring(0, 1000) + '\n... (truncated)' : resultStr;
-
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    id: `result-${Date.now()}`,
-                    role: "assistant",
-                    content: `✅ ${toolResult.toolName}:\n${displayResult}`,
-                    timestamp: new Date().toISOString(),
-                  },
-                ]);
-              } else {
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    id: `error-${Date.now()}`,
-                    role: "assistant",
-                    content: `❌ ${toolResult.toolName} failed: ${toolResult.error}`,
-                    timestamp: new Date().toISOString(),
-                  },
-                ]);
-              }
-              setCurrentToolCall(null);
+              // Update tool call with result
+              setToolCalls((prev) =>
+                prev.map((tc) =>
+                  tc.toolName === (event.data.toolName as string)
+                    ? {
+                        ...tc,
+                        output: event.data.result,
+                        success: event.data.success as boolean,
+                        error: event.data.error as string | undefined,
+                        latencyMs: event.data.latencyMs as number | undefined,
+                      }
+                    : tc
+                )
+              );
               break;
 
             case "payment_option":
-              // Payment option from agent - show payment button
-              const paymentOption: PaymentButton = event.data;
+              const paymentOption: PaymentButton = event.data as PaymentButton;
               setMessages((prev) => [
                 ...prev,
                 {
                   id: `payment-option-${Date.now()}`,
                   role: "assistant",
-                  content: ``, // Agent's text recommendation comes via 'token' events
+                  content: "",
                   timestamp: new Date().toISOString(),
                   paymentButton: paymentOption,
                 },
               ]);
-              setCurrentToolCall(null); // Clear tool call indicator
               break;
 
             case "payment_recorded":
-              // Track payment
-              const payment: Payment = event.data;
-              currentPayments.push(payment);
-              setTotalCost(payment.fee);
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: `payment-${Date.now()}`,
-                  role: "assistant",
-                  content: `💳 Cost: ${payment.displayFee} for ${payment.serverSlug}/${payment.apiSlug}`,
-                  timestamp: new Date().toISOString(),
-                },
-              ]);
+              setTotalCost(event.data.fee as string);
               break;
 
             case "error":
-              setError(event.data.message || "Stream error");
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: `stream-error-${Date.now()}`,
-                  role: "assistant",
-                  content: `❌ Error: ${event.data.message}`,
-                  timestamp: new Date().toISOString(),
-                },
-              ]);
+              setError(event.data.message as string);
               break;
 
             case "done":
-              // Stream complete
               setStreaming(false);
               break;
           }
         },
         (streamError: Error) => {
           console.error("Stream error:", streamError);
-
-          // Distinguish between network errors and API errors
-          const isNetworkError = streamError.message.includes("network") ||
-                                 streamError.message.includes("fetch") ||
-                                 streamError.message.includes("abort");
-
-          const errorMessage = isNetworkError
-            ? "Connection lost. Please check your internet and try again."
-            : streamError.message.includes("timeout")
-            ? "Request timeout. The server took too long to respond. Please try again."
-            : "An error occurred during streaming. Please try sending your message again.";
-
-          setError(errorMessage);
+          setError("Connection lost. Please try again.");
           setStreaming(false);
-          setCurrentToolCall(null);
-
-          // Add error message to chat
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `connection-error-${Date.now()}`,
-              role: "assistant",
-              content: `⚠️ ${errorMessage}`,
-              timestamp: new Date().toISOString(),
-            },
-          ]);
         },
         () => {
-          // Stream completed successfully
           setStreaming(false);
-          setCurrentToolCall(null);
         }
       );
 
-      // Set up a timeout for stream connection (120 seconds)
-      // Longer timeout needed for conversations with many messages in context
-      const streamTimeoutId = setTimeout(() => {
-        if (streaming && streamCleanupRef.current) {
-          setError("Request timeout. The server took too long to respond.");
-          setStreaming(false);
-          streamCleanupRef.current();
-        }
-      }, 120000);
-
-      // Store both cleanup function and timeout for proper cleanup
-      streamCleanupRef.current = () => {
-        clearTimeout(streamTimeoutId);
-        cleanup();
-      };
-    } catch (err: unknown) {
+      streamCleanupRef.current = cleanup;
+    } catch (err: any) {
       setError(err.message || "Failed to send message");
       setStreaming(false);
     }
-  }, [messageInput, session, streaming, sendChatMessage, createChatStreamListener]);
+  }, [messageInput, session, streaming]);
 
-  /**
-   * Memoize handleKeyPress to prevent function recreation
-   * Only recreates if handleSendMessage changes
-   */
-  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  }, [handleSendMessage]);
-
-  /**
-   * Handle payment button click - execute x402 payment and send result to agent
-   */
-  const handlePaymentButtonClick = useCallback(async (paymentBtn: PaymentButton) => {
-    if (!session) return;
-
-    try {
-      setError(null);
-
-      // Build proxy URL (same as APIDetailsPage)
-      const url = buildProxyUrl(paymentBtn.serverSlug, paymentBtn.apiSlug);
-      const fee = BigInt(paymentBtn.fee);
-
-      // Show payment in progress
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `payment-processing-${Date.now()}`,
-          role: "assistant",
-          content: `💳 Processing payment of ${paymentBtn.displayFee}...`,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-
-      // Execute payment via x402 (same flow as APIDetailsPage)
-      const result = await callAPIWithPayment(
-        url,
-        fee,
-        paymentBtn.tokenAddress
-      );
-
-      // Send result back to agent as new user message
-      const resultMessage = `Payment successful! I paid ${paymentBtn.displayFee} for ${paymentBtn.toolDisplayName}. Here's the result: ${JSON.stringify(result, null, 2)}`;
-
-      // Add user message to display
-      const userDisplayMessage: DisplayMessage = {
-        id: `user-payment-result-${Date.now()}`,
-        role: "user",
-        content: resultMessage,
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, userDisplayMessage]);
-
-      // Send message to backend
-      const sendResult = await sendChatMessage({
-        sessionId: session.id,
-        content: resultMessage,
-      });
-
-      if (!sendResult.success) {
-        setError(sendResult.error || "Failed to send payment result");
-        return;
+  const handleKeyPress = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
       }
+    },
+    [handleSendMessage]
+  );
 
-      // Start streaming agent's response to the result
-      setStreaming(true);
-      let assistantContent = "";
+  const handlePaymentButtonClick = useCallback(
+    async (paymentBtn: PaymentButton) => {
+      if (!session) return;
 
-      const cleanup = await createChatStreamListener(
-        session.id,
-        (event: SSEEvent) => {
-          switch (event.type) {
-            case "token":
+      try {
+        setError(null);
+        const url = buildProxyUrl(paymentBtn.serverSlug, paymentBtn.apiSlug);
+        const fee = BigInt(paymentBtn.fee);
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `payment-processing-${Date.now()}`,
+            role: "assistant",
+            content: `Processing payment of ${paymentBtn.displayFee}...`,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+
+        const result = await callAPIWithPayment(url, fee, paymentBtn.tokenAddress);
+
+        const resultMessage = `Payment successful! I paid ${paymentBtn.displayFee} for ${paymentBtn.toolDisplayName}. Here's the result: ${JSON.stringify(result, null, 2)}`;
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `user-payment-result-${Date.now()}`,
+            role: "user",
+            content: resultMessage,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+
+        const sendResult = await sendChatMessage({
+          sessionId: session.id,
+          content: resultMessage,
+        });
+
+        if (!sendResult.success) {
+          setError(sendResult.error || "Failed to send payment result");
+          return;
+        }
+
+        // Stream agent's response
+        setStreaming(true);
+        let assistantContent = "";
+
+        const cleanup = await createChatStreamListener(
+          session.id,
+          (event: SSEEvent) => {
+            if (event.type === "token") {
               assistantContent += event.data.content;
               setMessages((prev) => {
                 const lastMsg = prev[prev.length - 1];
-                if (lastMsg && lastMsg.role === "assistant" && !lastMsg.id.startsWith("tool-")) {
-                  return [
-                    ...prev.slice(0, -1),
-                    {
-                      ...lastMsg,
-                      content: assistantContent,
-                    },
-                  ];
+                if (lastMsg && lastMsg.role === "assistant") {
+                  return [...prev.slice(0, -1), { ...lastMsg, content: assistantContent }];
                 }
                 return [
                   ...prev,
@@ -476,50 +492,27 @@ export function ChatPage() {
                   },
                 ];
               });
-              break;
-
-            case "done":
+            } else if (event.type === "done" || event.type === "error") {
               setStreaming(false);
-              break;
+              if (event.type === "error") setError(event.data.message as string);
+            }
+          },
+          () => setStreaming(false),
+          () => setStreaming(false)
+        );
 
-            case "error":
-              setError(event.data.message || "Stream error");
-              setStreaming(false);
-              break;
-          }
-        },
-        (streamError: Error) => {
-          console.error("Stream error:", streamError);
-          setError("Failed to get agent response");
-          setStreaming(false);
-        },
-        () => {
-          setStreaming(false);
-        }
-      );
+        streamCleanupRef.current = cleanup;
+      } catch (err: any) {
+        setError(err.message || "Payment failed");
+      }
+    },
+    [session, callAPIWithPayment]
+  );
 
-      streamCleanupRef.current = cleanup;
-
-    } catch (err: any) {
-      setError(err.message || "Payment failed");
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `payment-error-${Date.now()}`,
-          role: "assistant",
-          content: `❌ Payment failed: ${err.message}`,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-    }
-  }, [session, callAPIWithPayment, sendChatMessage, createChatStreamListener]);
-
-  // Cleanup SSE on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (streamCleanupRef.current) {
-        streamCleanupRef.current();
-      }
+      if (streamCleanupRef.current) streamCleanupRef.current();
     };
   }, []);
 
@@ -527,7 +520,7 @@ export function ChatPage() {
     return (
       <div className="chat-page">
         <div className="connect-prompt">
-          <h2>👋 Connect Your Wallet</h2>
+          <h2>Connect Your Wallet</h2>
           <p>Please connect your wallet to chat with agents</p>
         </div>
       </div>
@@ -540,14 +533,14 @@ export function ChatPage() {
       <div className="chat-page">
         <div className="agent-selector">
           <div className="selector-header">
-            <h1>🤖 Chat with Agents</h1>
+            <h1>Chat with Agents</h1>
             <p>Select an agent to start a conversation</p>
           </div>
 
-          {error && <div className="error-box">❌ {error}</div>}
+          {error && <div className="error-box">{error}</div>}
 
           {loadingAgents ? (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+            <div className="loading-container">
               <Spinner size="large" label="Loading available agents..." />
             </div>
           ) : agents.length === 0 ? (
@@ -571,28 +564,10 @@ export function ChatPage() {
                   </div>
                   <p className="agent-description">{agent.description}</p>
                   <div className="agent-meta">
-                    <span className="meta-item">
-                      🔧 {agent.availableTools.length} APIs
-                    </span>
-                    <span className="meta-item">
-                      💬 {agent.totalMessages} messages
-                    </span>
+                    <span className="meta-item">{agent.availableTools.length} APIs</span>
+                    <span className="meta-item">{agent.totalMessages || 0} messages</span>
                   </div>
-                  <div className="agent-prompts">
-                    <h4>Starter Prompts:</h4>
-                    {agent.starterPrompts.length > 0 ? (
-                      <ul>
-                        {agent.starterPrompts.slice(0, 2).map((prompt, idx) => (
-                          <li key={idx}>{prompt}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="no-prompts">No starter prompts</p>
-                    )}
-                  </div>
-                  <button className="btn btn-primary btn-full">
-                    Start Chat
-                  </button>
+                  <button className="btn btn-primary btn-full">Start Chat</button>
                 </div>
               ))}
             </div>
@@ -602,160 +577,139 @@ export function ChatPage() {
     );
   }
 
-  // Chat view
-  return (
-    <div className="chat-page">
-      <div className="chat-container">
-        {/* Header */}
-        <div className="chat-header">
-          <div className="header-content">
-            <button
-              className="btn-back"
-              onClick={() => {
-                setSelectedAgent(null);
-                setMessages([]);
-                setSession(null);
-              }}
-            >
-              ← Back to Agents
-            </button>
-            <Breadcrumb
-              items={[
-                { label: 'Chat', path: '/chat' },
-                { label: selectedAgent.name }
-              ]}
-            />
-            <div className="agent-info">
-              <h2>{selectedAgent.name}</h2>
-              <p>{selectedAgent.description}</p>
-            </div>
-          </div>
-          <div className="header-stats">
-            {totalCost !== "0" && (
-              <div className="cost-display">
-                <span className="label">Total Cost</span>
-                <span className="cost">
-                  ${(parseInt(totalCost) / 1000000).toFixed(2)}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+  // Transform chat history to sidebar format
+  const sidebarChatHistory = chatHistory.map((chat, index) => ({
+    id: chat.id,
+    title: `Chat ${index + 1}`,
+    timestamp: chat.lastMessageAt || chat.createdAt,
+    isActive: session?.id === chat.id,
+  }));
 
-        {/* Messages Area */}
-        <div className="messages-container">
-          {messages.length === 0 && !error && (
-            <div className="empty-chat">
-              <div className="welcome-icon">🤖</div>
-              <h3>Start a conversation with {selectedAgent.name}</h3>
-              <p>Try one of these starter prompts:</p>
-              <div className="starter-prompts">
+  // Chat view - full height layout with sidebar
+  return (
+    <div className="chat-page chat-page--active chat-page--with-sidebar">
+      {/* Sidebar */}
+      <ChatSidebar
+        mode="agent"
+        agents={agents}
+        selectedAgent={selectedAgent}
+        onAgentChange={handleAgentChange}
+        onNewChat={handleNewChat}
+        chatHistory={sidebarChatHistory}
+        onChatSelect={switchToChat}
+        debugOpen={false}
+        onDebugToggle={() => {}}
+        toolCalls={[]}
+      />
+
+      {/* Main Chat Area */}
+      <div className="chat-main">
+        {/* Agent Identity (when no messages) */}
+        {messages.length === 0 && (
+          <div className="chat-identity">
+            <div className="chat-identity__icon">🤖</div>
+            <h2 className="chat-identity__name">{selectedAgent.name}</h2>
+            <p className="chat-identity__desc">{selectedAgent.description}</p>
+            {selectedAgent.starterPrompts && selectedAgent.starterPrompts.length > 0 && (
+              <div className="chat-identity__prompts">
                 {selectedAgent.starterPrompts.map((prompt, idx) => (
                   <button
                     key={idx}
-                    className="prompt-button"
-                    onClick={() => {
-                      setMessageInput(prompt);
-                    }}
+                    className="starter-prompt-btn"
+                    onClick={() => setMessageInput(prompt)}
                   >
                     "{prompt}"
                   </button>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`message message-${msg.role}`}
-            >
-              <div className="message-avatar">
-                {msg.role === "user" ? "👤" : "🤖"}
-              </div>
-              <div className="message-content">
-                {msg.content && (
-                  <div className="message-text">{msg.content}</div>
-                )}
+        {/* Messages */}
+        {messages.length > 0 && (
+          <div className="chat-messages">
+            {messages.map((msg) => (
+              <ChatMessage
+                key={msg.id}
+                role={msg.role}
+                content={msg.content}
+                timestamp={msg.timestamp}
+                isStreaming={streaming && msg.role === "assistant" && msg === messages[messages.length - 1]}
+                toolCall={msg.toolCall}
+                paymentButton={
+                  msg.paymentButton
+                    ? {
+                        label: `${msg.paymentButton.toolDisplayName} - ${msg.paymentButton.displayFee}`,
+                        onClick: () => handlePaymentButtonClick(msg.paymentButton!),
+                        disabled: streaming || isProcessing,
+                      }
+                    : undefined
+                }
+              />
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
 
-                {/* Render payment button if present */}
-                {msg.paymentButton && (
-                  <button
-                    className={`payment-button ${isProcessing ? 'payment-button-processing' : ''}`}
-                    onClick={() => handlePaymentButtonClick(msg.paymentButton!)}
-                    disabled={streaming || isProcessing}
-                    aria-label={`Pay ${msg.paymentButton.displayFee} to call ${msg.paymentButton.toolDisplayName}`}
-                  >
-                    <div className="payment-button-content">
-                      <span className="payment-button-label">
-                        {isProcessing ? 'Processing payment...' : msg.paymentButton.toolDisplayName}
-                      </span>
-                      <span className="payment-button-cost">{msg.paymentButton.displayFee}</span>
-                    </div>
-                    <span style={{ fontSize: '24px' }}>
-                      {isProcessing ? '⏳' : '💳'}
-                    </span>
-                  </button>
-                )}
+        {/* Error display */}
+        {error && (
+          <div className="chat-error">
+            <span>{error}</span>
+            <button onClick={() => setError(null)}>x</button>
+          </div>
+        )}
 
-                <time className="message-time">
-                  {new Date(msg.timestamp).toLocaleTimeString()}
-                </time>
-              </div>
-            </div>
-          ))}
+        {/* Input Area - fixed at bottom */}
+        <div className="chat-input-area">
+          {/* Tool Pills */}
+          <div className="chat-tools">
+            <ToolPills
+              tools={getToolInfoList()}
+              onRemove={handleToolRemove}
+              onAddClick={() => setIsToolPickerOpen(true)}
+              disabled={streaming}
+            />
+          </div>
 
-          {currentToolCall && (
-            <div className="tool-call-indicator">
-              <div className="tool-loading">
-                <div className="spinner"></div>
-                <span>{currentToolCall.name}</span>
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="message message-error">
-              <div className="message-avatar">⚠️</div>
-              <div className="message-content">
-                <div className="message-text">{error}</div>
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Area */}
-        <div className="chat-input-container">
-          <div className="input-wrapper">
+          {/* Input Bar */}
+          <div className="chat-input-bar">
             <textarea
+              className="chat-input"
               value={messageInput}
               onChange={(e) => setMessageInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message... (Shift+Enter for new line)"
+              placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
               disabled={streaming}
-              className="chat-input"
-              aria-label="Message input - Type your message to the agent"
-              aria-describedby="message-help"
+              rows={1}
             />
-            <p id="message-help" className="sr-only">
-              Press Enter to send, Shift+Enter for new line. Disabled while agent is thinking.
-            </p>
-            <button
-              className="btn btn-primary btn-send"
-              onClick={handleSendMessage}
-              disabled={!messageInput.trim() || streaming}
-              aria-label={streaming ? "Agent is processing your message" : "Send message"}
-            >
-              {streaming ? "⏳ Streaming..." : "Send"}
-            </button>
+            <div className="chat-input-actions">
+              <ModelSelector
+                selectedModel={selectedModel}
+                onModelChange={setSelectedModel}
+                disabled={streaming}
+              />
+              <button
+                className="chat-send-btn"
+                onClick={handleSendMessage}
+                disabled={streaming || !messageInput.trim()}
+              >
+                {streaming ? "Sending..." : "Send"}
+              </button>
+            </div>
           </div>
-          {streaming && (
-            <p className="input-help">Agent is thinking and calling APIs...</p>
-          )}
         </div>
       </div>
+
+      {/* Tool Picker Modal */}
+      <ToolPickerModal
+        isOpen={isToolPickerOpen}
+        onClose={() => setIsToolPickerOpen(false)}
+        servers={servers}
+        selectedTools={selectedTools}
+        onToolAdd={handleToolAdd}
+        onToolRemove={handleToolRemove}
+      />
     </div>
   );
 }
