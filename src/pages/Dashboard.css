@@ -60,6 +60,67 @@
   margin: 0;
 }
 
+/* ===== Server Selector Tabs ===== */
+.server-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.server-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 18px;
+  background: var(--bg-elevated, #1e1e2a);
+  border: 2px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 140px;
+}
+
+.server-tab:hover {
+  border-color: var(--primary, #6366f1);
+  background: var(--bg-card-hover, #1a1a24);
+}
+
+.server-tab--active {
+  border-color: var(--primary, #6366f1);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.server-tab--active .server-tab__name {
+  color: var(--primary, #6366f1);
+}
+
+.server-tab__name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary, #f1f5f9);
+}
+
+.server-tab__slug {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted, #64748b);
+}
+
+.server-tab--add {
+  border-style: dashed;
+  justify-content: center;
+  align-items: center;
+  color: var(--text-muted, #64748b);
+  font-weight: 600;
+}
+
+.server-tab--add:hover {
+  color: var(--primary, #6366f1);
+  border-color: var(--primary, #6366f1);
+}
+
 /* ===== Token/Server Card ===== */
 .token-card {
   background: linear-gradient(135deg, var(--primary, #6366f1) 0%, #8b5cf6 100%);
@@ -365,5 +426,13 @@
     flex-direction: column;
     align-items: stretch;
     gap: 16px;
+  }
+
+  .server-selector {
+    flex-direction: column;
+  }
+
+  .server-tab {
+    min-width: 100%;
   }
 }

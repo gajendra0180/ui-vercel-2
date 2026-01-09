@@ -26,9 +26,15 @@ function generateSlugFromName(name: string): string {
 export function Dashboard() {
   const navigate = useNavigate();
   const account = useActiveAccount();
-  const [myServer, setMyServer] = useState<ServerEntry | null>(null);
+
+  // Multi-server state
+  const [myServers, setMyServers] = useState<ServerEntry[]>([]);
+  const [selectedServerIndex, setSelectedServerIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  
+
+  // Derived: currently selected server
+  const selectedServer = myServers[selectedServerIndex] || null;
+
   // Add API form state
   const [showAddForm, setShowAddForm] = useState(false);
   const [newApiSlug, setNewApiSlug] = useState("");
@@ -43,7 +49,7 @@ export function Dashboard() {
 
   useEffect(() => {
     if (account) {
-      loadMyServer();
+      loadMyServers();
     }
   }, [account]);
 
@@ -54,19 +60,23 @@ export function Dashboard() {
     }
   }, [newApiName, slugManuallyEdited]);
 
-  const loadMyServer = async () => {
+  const loadMyServers = async () => {
     try {
       setLoading(true);
       const allServers = await getAllServers();
-      // Find the server created by current user (1 builder = 1 server)
+      // Filter all servers created by current user
       if (account) {
-        const userServer = allServers.find(
+        const userServers = allServers.filter(
           (server) => server.builder.toLowerCase() === account.address.toLowerCase()
         );
-        setMyServer(userServer || null);
+        setMyServers(userServers);
+        // Reset selection if current index is out of bounds
+        if (selectedServerIndex >= userServers.length) {
+          setSelectedServerIndex(0);
+        }
       }
     } catch (error) {
-      console.error("Failed to load server:", error);
+      console.error("Failed to load servers:", error);
     } finally {
       setLoading(false);
     }
@@ -86,8 +96,8 @@ export function Dashboard() {
   };
 
   const handleAddApi = async () => {
-    if (!myServer || !account) return;
-    
+    if (!selectedServer || !account) return;
+
     // Validate slug
     if (!newApiSlug.trim()) {
       setAddError("API slug is required");
@@ -98,11 +108,11 @@ export function Dashboard() {
       return;
     }
     // Check for duplicate slug
-    if (myServer.apis?.some(api => api.slug === newApiSlug)) {
+    if (selectedServer.apis?.some(api => api.slug === newApiSlug)) {
       setAddError(`API slug "${newApiSlug}" already exists. Choose a different slug.`);
       return;
     }
-    
+
     // Validate name
     if (!newApiName.trim()) {
       setAddError("API name is required");
@@ -137,7 +147,7 @@ export function Dashboard() {
 
     try {
       const result = await addApiToServer({
-        serverSlug: myServer.slug,
+        serverSlug: selectedServer.slug,
         slug: newApiSlug.toLowerCase().trim(),
         name: newApiName.trim(),
         apiUrl: newApiUrl.trim(),
@@ -156,7 +166,7 @@ export function Dashboard() {
         setSlugManuallyEdited(false); // Reset for next API
         setShowAddForm(false);
         // Reload server data
-        await loadMyServer();
+        await loadMyServers();
       } else {
         setAddError(result.error || "Failed to add API");
       }
@@ -182,21 +192,21 @@ export function Dashboard() {
     <div className="dashboard-page">
       <div className="dashboard-header">
         <h1>🖥️ Server Dashboard</h1>
-        <p>Manage your server and APIs</p>
+        <p>Manage your servers and APIs</p>
       </div>
 
       <div className="dashboard-content">
         {/* Server Section */}
         <div className="dashboard-section">
-          <h2>🖥️ My Server</h2>
+          <h2>🖥️ My Servers</h2>
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
-              <Spinner size="large" label="Loading your server..." />
+              <Spinner size="large" label="Loading your servers..." />
             </div>
-          ) : !myServer ? (
+          ) : myServers.length === 0 ? (
             <EmptyState
               icon="🖥️"
-              title="No Server Registered"
+              title="No Servers Registered"
               description="Create your API marketplace presence by registering a server. This will enable you to monetize your APIs through pay-per-call endpoints."
               actionButton={{
                 label: "🚀 Register Server",
@@ -205,38 +215,66 @@ export function Dashboard() {
               }}
             />
           ) : (
-            <div className="token-card">
-              <div className="token-header">
-                <div className="token-title">
-                  <h3>{myServer.name}</h3>
-                  <span className="token-symbol">{myServer.symbol}</span>
-                </div>
-                <div className="server-slug-display">/{myServer.slug}</div>
-                <div className="token-stats">
-                  <div className="stat">
-                    <span className="stat-value">{myServer.subscriptionCount || "0"}</span>
-                    <span className="stat-label">total usage</span>
-                  </div>
-                  <div className="stat">
-                    <span className="stat-value">{myServer.apiCount || myServer.apis?.length || 0}</span>
-                    <span className="stat-label">APIs</span>
-                  </div>
-                </div>
+            <>
+              {/* Server Selector Tabs */}
+              <div className="server-selector">
+                {myServers.map((server, index) => (
+                  <button
+                    key={server.id}
+                    className={`server-tab ${index === selectedServerIndex ? 'server-tab--active' : ''}`}
+                    onClick={() => {
+                      setSelectedServerIndex(index);
+                      setShowAddForm(false); // Close form when switching servers
+                    }}
+                  >
+                    <span className="server-tab__name">{server.name}</span>
+                    <span className="server-tab__slug">/{server.slug}</span>
+                  </button>
+                ))}
+                <button
+                  className="server-tab server-tab--add"
+                  onClick={() => navigate("/submit")}
+                >
+                  + New Server
+                </button>
               </div>
-              <div className="token-address">
-                <span className="label">Token Address:</span>
-                <code>{myServer.id}</code>
-              </div>
-            </div>
+
+              {/* Selected Server Card */}
+              {selectedServer && (
+                <div className="token-card">
+                  <div className="token-header">
+                    <div className="token-title">
+                      <h3>{selectedServer.name}</h3>
+                      <span className="token-symbol">{selectedServer.symbol}</span>
+                    </div>
+                    <div className="server-slug-display">/{selectedServer.slug}</div>
+                    <div className="token-stats">
+                      <div className="stat">
+                        <span className="stat-value">{selectedServer.subscriptionCount || "0"}</span>
+                        <span className="stat-label">total usage</span>
+                      </div>
+                      <div className="stat">
+                        <span className="stat-value">{selectedServer.apiCount || selectedServer.apis?.length || 0}</span>
+                        <span className="stat-label">APIs</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="token-address">
+                    <span className="label">Token Address:</span>
+                    <code>{selectedServer.id}</code>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
         {/* APIs Section */}
-        {myServer && (
+        {selectedServer && (
           <div className="dashboard-section">
             <div className="section-header">
-              <h2>🔌 My APIs</h2>
-              <button 
+              <h2>🔌 APIs for {selectedServer.name}</h2>
+              <button
                 className="btn btn-primary"
                 onClick={() => setShowAddForm(!showAddForm)}
               >
@@ -247,7 +285,7 @@ export function Dashboard() {
             {/* Add API Form */}
             {showAddForm && (
               <div className="add-api-form">
-                <h3>Add New API</h3>
+                <h3>Add New API to {selectedServer.name}</h3>
                 <div className="form-group">
                   <label>API Name *</label>
                   <input
@@ -269,7 +307,7 @@ export function Dashboard() {
                     maxLength={30}
                   />
                   <small>
-                    URL: <code>/api/{myServer.slug}/{newApiSlug || "api-slug"}</code>
+                    URL: <code>/api/{selectedServer.slug}/{newApiSlug || "api-slug"}</code>
                   </small>
                 </div>
                 <div className="form-group">
@@ -309,7 +347,7 @@ export function Dashboard() {
                 </div>
                 {addError && <div className="error-box">❌ {addError}</div>}
                 {addSuccess && <div className="success-box">✅ API added successfully!</div>}
-                <button 
+                <button
                   className="btn btn-primary"
                   onClick={handleAddApi}
                   disabled={addingApi}
@@ -321,11 +359,11 @@ export function Dashboard() {
 
             {/* APIs List */}
             <div className="apis-list">
-              {myServer.apis && myServer.apis.length > 0 ? (
-                myServer.apis.map((api) => (
+              {selectedServer.apis && selectedServer.apis.length > 0 ? (
+                selectedServer.apis.map((api) => (
                   <div key={api.slug} className="api-card">
                     <div className="api-card-header">
-                      <code className="api-slug-badge">/{myServer.slug}/{api.slug}</code>
+                      <code className="api-slug-badge">/{selectedServer.slug}/{api.slug}</code>
                       <h4>{api.name}</h4>
                       <span className="api-fee-badge">{formatFee(api.fee)}</span>
                     </div>
@@ -341,11 +379,11 @@ export function Dashboard() {
                 <EmptyState
                   icon="🔌"
                   title="No APIs Added Yet"
-                  description="Start monetizing your services by adding APIs to your server. Each API will receive a unique pay-per-call endpoint."
+                  description="Start monetizing your services by adding APIs to this server. Each API will receive a unique pay-per-call endpoint."
                   actionButton={{
                     label: "➕ Add Your First API",
                     variant: "primary",
-                    onClick: () => setShowAddApiForm(!showAddApiForm)
+                    onClick: () => setShowAddForm(true)
                   }}
                 />
               )}
@@ -364,6 +402,10 @@ export function Dashboard() {
             <div className="info-row">
               <span className="info-label">Network:</span>
               <span className="info-value">Base Sepolia</span>
+            </div>
+            <div className="info-row">
+              <span className="info-label">Servers:</span>
+              <span className="info-value">{myServers.length}</span>
             </div>
           </div>
         </div>
