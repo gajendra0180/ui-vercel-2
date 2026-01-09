@@ -1,4 +1,4 @@
-// API utilities for IAO backend integration
+// API utilities for APIX backend integration
 import { extractErrorMessage } from "./errorHandling";
 
 // @ts-ignore - Vite env variable
@@ -671,6 +671,7 @@ export interface ChatMessage {
 export async function createChatSession(data: {
   agentId: string;
   userAddress: string;
+  forceNew?: boolean;
 }): Promise<{ success: boolean; session?: ChatSession; error?: string }> {
   try {
     const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
@@ -692,6 +693,33 @@ export async function createChatSession(data: {
   } catch (error: unknown) {
     console.error("Error creating chat session:", error);
     return { success: false, error: error.message || "Network error" };
+  }
+}
+
+/**
+ * Get user's chat sessions (optionally filtered by agent)
+ */
+export async function getUserChatSessions(
+  userAddress: string,
+  agentId?: string
+): Promise<ChatSession[]> {
+  try {
+    const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    const url = agentId
+      ? `${baseUrl}/api/chat/sessions/user/${userAddress}?agentId=${agentId}`
+      : `${baseUrl}/api/chat/sessions/user/${userAddress}`;
+
+    const response = await fetchWithTimeout(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch sessions: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result.data || [];
+  } catch (error: unknown) {
+    console.error("Error fetching user sessions:", error);
+    return [];
   }
 }
 

@@ -19,6 +19,7 @@ const AgentComposerPage = lazy(() => import("./pages/AgentComposerPage").then(m 
 const ChatPage = lazy(() => import("./pages/ChatPage").then(m => ({ default: m.ChatPage })));
 const AgentMarketplace = lazy(() => import("./pages/AgentMarketplace").then(m => ({ default: m.AgentMarketplace })));
 const AgentDetailsPage = lazy(() => import("./pages/AgentDetailsPage").then(m => ({ default: m.AgentDetailsPage })));
+const NewChatPlayground = lazy(() => import("./pages/NewChatPlayground").then(m => ({ default: m.NewChatPlayground })));
 
 /**
  * Loading fallback component shown while route chunks are being loaded
@@ -51,7 +52,7 @@ function Navigation() {
   return (
     <nav className="main-nav">
       <div className="nav-brand">
-        <Link to="/" onClick={handleNavClick}>🚀 IAO Launchpad</Link>
+        <Link to="/" onClick={handleNavClick}>🚀 APIX</Link>
       </div>
 
       {/* Mobile hamburger button */}
@@ -69,25 +70,22 @@ function Navigation() {
 
       <div className={`nav-links ${mobileMenuOpen ? "mobile-open" : ""}`} id="nav-links">
         <Link to="/" className={isActive("/") ? "active" : ""} onClick={handleNavClick}>
-          📊 Overview
+          Overview
         </Link>
         <Link to="/marketplace" className={isActive("/marketplace") ? "active" : ""} onClick={handleNavClick}>
-          🛍️ Marketplace
+          APIs
         </Link>
-        <Link to="/chat" className={isActive("/chat") ? "active" : ""} onClick={handleNavClick}>
-          💬 Chat
+        <Link to="/agent-marketplace" className={isActive("/agent-marketplace") || isActive("/chat") ? "active" : ""} onClick={handleNavClick}>
+          Agents
         </Link>
-        <Link to="/agent-marketplace" className={isActive("/agent-marketplace") ? "active" : ""} onClick={handleNavClick}>
-          🎯 Agent Marketplace
+        <Link to="/new-chat" className={isActive("/new-chat") ? "active" : ""} onClick={handleNavClick}>
+          Playground
         </Link>
-        <Link to="/agents" className={isActive("/agents") ? "active" : ""} onClick={handleNavClick}>
-          🤖 Agents
-        </Link>
-        <Link to="/submit" className={isActive("/submit") ? "active" : ""} onClick={handleNavClick}>
-          🖥️ Register Server
+        <Link to="/submit" className={isActive("/submit") || isActive("/agents") ? "active" : ""} onClick={handleNavClick}>
+          Build
         </Link>
         <Link to="/dashboard" className={isActive("/dashboard") ? "active" : ""} onClick={handleNavClick}>
-          👤 Dashboard
+          Dashboard
         </Link>
       </div>
       <div className="nav-wallet">
@@ -111,6 +109,7 @@ function AppContent() {
             <Route path="/marketplace" element={<MarketplacePage />} />
             <Route path="/server/:serverSlug" element={<APIDetailsPage />} />
             <Route path="/chat" element={<ChatPage />} />
+            <Route path="/new-chat" element={<NewChatPlayground />} />
             <Route path="/agent-marketplace" element={<AgentMarketplace />} />
             <Route path="/agent/:agentId" element={<AgentDetailsPage />} />
             <Route path="/agents" element={<AgentComposerPage />} />

@@ -1,6 +1,6 @@
-// Contract addresses for IAO platform
+// Contract addresses for APIX platform
 
-// Token Factory Contract (creates new IAO tokens)
+// Token Factory Contract (creates new APIX tokens)
 export const TOKEN_FACTORY_ADDRESS = "0xF110bA6BBc7cD595842B6b56ab870faC811e41B5";
 
 // USDC on Base mainnet (payment token)

@@ -563,9 +563,23 @@ export function SubmitAPIForm() {
 
   return (
     <div className="submit-page">
+      {/* Build Options Header */}
+      <div className="build-options">
+        <h1>Build on APIX</h1>
+        <p>Create APIs or AI agents for the decentralized marketplace</p>
+        <div className="build-tabs">
+          <button className="build-tab build-tab--active">
+            Register Server
+          </button>
+          <button className="build-tab" onClick={() => navigate('/agents')}>
+            Create Agent
+          </button>
+        </div>
+      </div>
+
       <div className="submit-header">
-        <h1>🖥️ Register Your Server</h1>
-        <p>Create your server and list your APIs on the IAO Launchpad</p>
+        <h2>🖥️ Register Your Server</h2>
+        <p>Create your server and list your APIs on APIX</p>
         <div className="network-warning">
           ⚠️ Requires Base Sepolia. Switch networks in your wallet before submitting.
         </div>
@@ -793,7 +807,7 @@ export function SubmitAPIForm() {
         <div className="form-info">
           <p>
             <strong>Note:</strong> Registering a server will create a new token contract and register it
-            on the IAO Launchpad. This requires a transaction on Base Sepolia.
+            on APIX. This requires a transaction on Base Sepolia.
           </p>
           <p>
             <strong>Payment Token:</strong> USDC on Base ({USDC_ADDRESS})
@@ -807,7 +821,7 @@ export function SubmitAPIForm() {
         title="Register Server & Create Token?"
         message={
           <>
-            <p>You are about to register a new server and create its IAO token:</p>
+            <p>You are about to register a new server and create its APIX token:</p>
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '6px', margin: '12px 0' }}>
               <p style={{ margin: '6px 0' }}>
                 <strong>Server:</strong> {formData.name || "Unnamed"}
