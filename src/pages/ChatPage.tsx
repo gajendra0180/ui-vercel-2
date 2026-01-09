@@ -578,10 +578,11 @@ export function ChatPage() {
   }
 
   // Transform chat history to sidebar format
+  // chatHistory is sorted newest first, so reverse index for numbering
   const sidebarChatHistory = chatHistory.map((chat, index) => ({
     id: chat.id,
-    title: `Chat ${index + 1}`,
-    timestamp: chat.lastMessageAt || chat.createdAt,
+    title: `Chat ${chatHistory.length - index}`,
+    timestamp: chat.createdAt, // Use createdAt for consistent timestamps
     isActive: session?.id === chat.id,
   }));
 
