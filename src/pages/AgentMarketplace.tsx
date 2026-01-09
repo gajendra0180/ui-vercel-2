@@ -93,9 +93,14 @@ export function AgentMarketplace() {
           <h1>🤖 Agent Marketplace</h1>
           <p>Discover and chat with AI agents powered by decentralized APIs</p>
         </div>
-        <button className="btn btn-primary" onClick={handleCreateClick}>
-          ➕ Create Your Agent
-        </button>
+        <div className="header-actions">
+          <button className="btn btn-secondary" onClick={() => navigate("/new-chat")}>
+            🧪 Playground
+          </button>
+          <button className="btn btn-primary" onClick={handleCreateClick}>
+            ➕ Create Your Agent
+          </button>
+        </div>
       </div>
 
       {/* Search and Filters */}
