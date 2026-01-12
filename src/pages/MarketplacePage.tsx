@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useActiveAccount } from "thirdweb/react";
-import { getAllServers, getServersByChain, ServerEntry } from "../utils/api";
+import { getAllServers, ServerEntry } from "../utils/api";
 import { APICard } from "../components/APICard";
 import { Spinner } from "../components/Spinner";
 import { SkeletonCard } from "../components/Skeleton";
-import { ChainSelector, ChainBadge } from "../components/ChainSelector";
 import { useDebounce } from "../hooks/useDebounce";
 import { useFavorites } from "../hooks/useFavorites";
 import "./MarketplacePage.css";
@@ -121,24 +120,11 @@ export function MarketplacePage() {
   );
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [selectedChainId, setSelectedChainId] = useState<string | null>(
-    searchParams.get("chain") || null
-  );
   const { favorites, isFavorite, toggleFavorite } = useFavorites(account?.address);
 
   useEffect(() => {
     loadServers();
-  }, [selectedChainId]);
-
-  useEffect(() => {
-    // Update URL when chain filter changes
-    if (selectedChainId) {
-      searchParams.set("chain", selectedChainId);
-    } else {
-      searchParams.delete("chain");
-    }
-    setSearchParams(searchParams, { replace: true });
-  }, [selectedChainId]);
+  }, []);
 
   useEffect(() => {
     // Update URL when category changes
@@ -153,10 +139,7 @@ export function MarketplacePage() {
   const loadServers = async () => {
     try {
       setLoading(true);
-      // Use chain-filtered endpoint if a chain is selected
-      const allServers = selectedChainId
-        ? await getServersByChain(selectedChainId)
-        : await getAllServers();
+      const allServers = await getAllServers();
       setServers(allServers);
     } catch (error) {
       console.error("Failed to load servers:", error);
@@ -322,15 +305,6 @@ export function MarketplacePage() {
             <p id="search-help" className="sr-only">
               Type to search for API servers. Results update as you type.
             </p>
-          </div>
-          {/* Chain Filter */}
-          <div className="chain-filter-hero">
-            <ChainSelector
-              selectedChainId={selectedChainId}
-              onSelectChain={setSelectedChainId}
-              variant="pills"
-              showAllOption={true}
-            />
           </div>
         </div>
       </section>

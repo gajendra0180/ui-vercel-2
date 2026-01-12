@@ -8,10 +8,9 @@ import { baseSepolia as baseSepoliaViem } from "viem/chains";
 import { TOKEN_FACTORY_ADDRESS, TOKEN_FACTORY_ABI } from "../contracts/tokenFactory";
 import { USDC_ADDRESS } from "../constants/addresses";
 import { thirdwebClient } from "../lib/thirdwebClient";
-import { checkServerSlugExists, getChains, ChainConfig } from "../utils/api";
+import { checkServerSlugExists } from "../utils/api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Tooltip } from "../components/Tooltip";
-import { ChainSelector, ChainBadge } from "../components/ChainSelector";
 import "./SubmitAPIForm.css";
 
 // @ts-ignore - Vite env variable
@@ -86,34 +85,6 @@ export function SubmitAPIForm() {
     symbol: "",
     tags: [] as string[],
   });
-
-  // Chain selection state
-  const [selectedChainId, setSelectedChainId] = useState<string>("84532"); // Default to Base Sepolia
-  const [chains, setChains] = useState<ChainConfig[]>([]);
-  const [loadingChains, setLoadingChains] = useState(true);
-
-  // Load available chains on mount
-  useEffect(() => {
-    const loadChains = async () => {
-      try {
-        setLoadingChains(true);
-        const availableChains = await getChains();
-        setChains(availableChains);
-        // Set default to first available chain
-        if (availableChains.length > 0 && !availableChains.find(c => c.chainId === selectedChainId)) {
-          setSelectedChainId(availableChains[0].chainId);
-        }
-      } catch (err) {
-        console.error("Failed to load chains:", err);
-      } finally {
-        setLoadingChains(false);
-      }
-    };
-    loadChains();
-  }, []);
-
-  // Get current chain config
-  const currentChainConfig = chains.find(c => c.chainId === selectedChainId);
 
   // Support multiple APIs
   const [apis, setApis] = useState<FormApiEntry[]>([
@@ -277,15 +248,10 @@ export function SubmitAPIForm() {
       return;
     }
 
-    // For EVM chains, verify wallet is on correct network
-    if (currentChainConfig?.chainType === "evm") {
-      if (!chain || chain.id.toString() !== selectedChainId) {
-        setError(`Please switch your wallet to ${currentChainConfig?.name || "the correct network"} before submitting.`);
-        return;
-      }
+    if (!chain || chain.id !== baseSepolia.id) {
+      setError("Please switch your wallet to Base Sepolia testnet before submitting.");
+      return;
     }
-    // For Solana, the smart contract flow is different - handled separately
-    // Currently only EVM token creation is supported via the factory contract
 
     // Show confirmation dialog before proceeding
     setShowRegisterConfirm(true);
@@ -348,7 +314,6 @@ export function SubmitAPIForm() {
         const validationPayload = {
           serverSlug: formData.slug.trim(),
           builder: account.address.toLowerCase(),
-          chainId: selectedChainId,
           tags: formData.tags.length > 0 ? formData.tags : undefined,
           apis: apis.map(api => ({
             slug: api.slug.trim(),
@@ -499,13 +464,12 @@ export function SubmitAPIForm() {
                 fee: parseUnits(api.fee, 6).toString(), // Convert to smallest unit
               }));
               
-              // Build registration payload with slugs and chainId
+              // Build registration payload with slugs
               const registerPayload = {
                 tokenAddress: tokenAddress.toLowerCase(),
                 serverSlug: formData.slug.toLowerCase().trim(),
                 name: formData.name.trim(),
                 symbol: formData.symbol.trim(),
-                chainId: selectedChainId,
                 tags: formData.tags.length > 0 ? formData.tags : undefined,
                 apis: formattedApis,
                 builder: account.address.toLowerCase(),
@@ -614,62 +578,14 @@ export function SubmitAPIForm() {
       </div>
 
       <div className="submit-header">
-        <h1>🖥️ Register Your Server</h1>
+        <h2>🖥️ Register Your Server</h2>
         <p>Create your server and list your APIs on APIX</p>
-        {currentChainConfig && (
-          <div className="network-warning">
-            {currentChainConfig.chainType === "evm" ? (
-              <>⚠️ Requires {currentChainConfig.name}. Switch networks in your EVM wallet before submitting.</>
-            ) : (
-              <>⚠️ Requires Solana ({currentChainConfig.name}). Connect your Solana wallet (Phantom) before submitting.</>
-            )}
-          </div>
-        )}
+        <div className="network-warning">
+          ⚠️ Requires Base Sepolia. Switch networks in your wallet before submitting.
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="submit-form">
-        {/* Chain Selection */}
-        <div className="form-section">
-          <h3>Blockchain Network</h3>
-          <p className="section-description">
-            Select which blockchain your server will operate on. This determines the payment token and smart contracts used.
-          </p>
-          <div className="form-group">
-            <label>Select Chain *</label>
-            {loadingChains ? (
-              <div className="loading-chains">Loading available chains...</div>
-            ) : (
-              <div className="chain-selector-form">
-                {chains.map((chain) => (
-                  <button
-                    key={chain.chainId}
-                    type="button"
-                    className={`chain-option ${selectedChainId === chain.chainId ? "chain-option--selected" : ""}`}
-                    onClick={() => setSelectedChainId(chain.chainId)}
-                  >
-                    <span className="chain-option__icon">
-                      {chain.chainType === "solana" ? "◎" : "⬡"}
-                    </span>
-                    <span className="chain-option__info">
-                      <span className="chain-option__name">{chain.name}</span>
-                      <span className="chain-option__type">{chain.chainType.toUpperCase()}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {currentChainConfig && (
-              <small className="chain-info">
-                {currentChainConfig.chainType === "evm" ? (
-                  <>Connect an EVM wallet (MetaMask, Coinbase Wallet) to register on {currentChainConfig.name}</>
-                ) : (
-                  <>Connect a Solana wallet (Phantom) to register on {currentChainConfig.name}</>
-                )}
-              </small>
-            )}
-          </div>
-        </div>
-
         <div className="form-section">
           <h3>Server Information</h3>
           <p className="section-description">
@@ -891,11 +807,10 @@ export function SubmitAPIForm() {
         <div className="form-info">
           <p>
             <strong>Note:</strong> Registering a server will create a new token contract and register it
-            on APIX. This requires a transaction on {currentChainConfig?.name || "the selected blockchain"}.
+            on APIX. This requires a transaction on Base Sepolia.
           </p>
           <p>
-            <strong>Payment Token:</strong> USDC on {currentChainConfig?.name || "selected chain"}{" "}
-            ({currentChainConfig?.paymentTokenAddress || USDC_ADDRESS})
+            <strong>Payment Token:</strong> USDC on Base ({USDC_ADDRESS})
           </p>
         </div>
       </form>
@@ -915,14 +830,11 @@ export function SubmitAPIForm() {
                 <strong>Slug:</strong> /{formData.slug || "server-slug"}
               </p>
               <p style={{ margin: '6px 0' }}>
-                <strong>Chain:</strong> {currentChainConfig?.name || "Unknown"} ({currentChainConfig?.chainType?.toUpperCase() || "EVM"})
-              </p>
-              <p style={{ margin: '6px 0' }}>
                 <strong>APIs:</strong> {apis.length}
               </p>
             </div>
             <p style={{ fontSize: '0.9em', opacity: 0.8, marginBottom: 0 }}>
-              ⚠️ This will create a token contract and transaction on {currentChainConfig?.name || "the selected blockchain"}. You will need to sign the transaction with your wallet.
+              ⚠️ This will create a token contract and transaction on Base Sepolia. You will need to sign the transaction with your wallet.
             </p>
           </>
         }

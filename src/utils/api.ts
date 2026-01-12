@@ -65,24 +65,8 @@ export interface ServerEntry {
   tags?: string[];               // Array of category tags
   apis?: ApiEntry[];             // Array of registered APIs (each with own fee)
   apiCount?: number;             // Number of APIs
-  chainId?: string;              // Chain ID (e.g., "84532" for Base Sepolia, "devnet" for Solana)
-  chainType?: "evm" | "solana";  // Chain type
   createdAt?: string;            // Creation timestamp
   updatedAt?: string;            // Last update timestamp
-}
-
-/**
- * Chain configuration from backend
- */
-export interface ChainConfig {
-  chainId: string;
-  chainType: "evm" | "solana";
-  name: string;
-  factoryAddress: string;
-  paymentTokenAddress: string;
-  rpcUrl: string;
-  explorerUrl: string;
-  enabled: boolean;
 }
 
 // Alias for backward compatibility
@@ -217,68 +201,6 @@ export async function getAllServers(): Promise<ServerEntry[]> {
 export const getAllAPIs = getAllServers;
 
 /**
- * Get all available chain configurations
- */
-export async function getChains(): Promise<ChainConfig[]> {
-  try {
-    const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-    const response = await fetchWithTimeout(`${baseUrl}/api/chains`);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch chains: ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (data.success && Array.isArray(data.chains)) {
-      return data.chains.filter((chain: ChainConfig) => chain.enabled);
-    }
-
-    return [];
-  } catch (error) {
-    console.error("Error fetching chains:", error);
-    // Return default chain on error
-    return [{
-      chainId: "84532",
-      chainType: "evm",
-      name: "Base Sepolia",
-      factoryAddress: "",
-      paymentTokenAddress: "",
-      rpcUrl: "",
-      explorerUrl: "",
-      enabled: true,
-    }];
-  }
-}
-
-/**
- * Get servers filtered by chain ID
- */
-export async function getServersByChain(chainId: string | null): Promise<ServerEntry[]> {
-  try {
-    const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-    const url = chainId
-      ? `${baseUrl}/api/servers?chainId=${encodeURIComponent(chainId)}`
-      : `${baseUrl}/api/servers`;
-
-    const response = await fetchWithTimeout(url);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch servers: ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (data.success && Array.isArray(data.servers)) {
-      return data.servers;
-    }
-
-    return [];
-  } catch (error) {
-    console.error("Error fetching servers by chain:", error);
-    return [];
-  }
-}
-
-/**
  * Get a specific server by slug
  */
 export async function getServerBySlug(serverSlug: string): Promise<ServerEntry | null> {
@@ -340,8 +262,6 @@ export async function registerServer(serverData: {
   apis: { slug: string; name: string; apiUrl: string; description: string; fee: string }[];
   builder: string;
   paymentToken: string;
-  chainId?: string;              // Chain ID (e.g., "84532" or "devnet")
-  tags?: string[];               // Category tags
 }): Promise<{ success: boolean; server?: ServerEntry; error?: string }> {
   try {
     const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
