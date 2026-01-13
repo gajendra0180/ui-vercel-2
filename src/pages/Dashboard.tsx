@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useActiveAccount } from "thirdweb/react";
 import { parseUnits } from "viem";
-import { getAllServers, addApiToServer, ServerEntry } from "../utils/api";
+import { getAllServers, getServersByChain, addApiToServer, ServerEntry } from "../utils/api";
 import { Spinner } from "../components/Spinner";
 import { EmptyState } from "../components/EmptyState";
+import { useChainContext } from "../contexts/ChainContext";
+import { useX402Payment } from "../hooks/useX402Payment";
 import "./Dashboard.css";
 
 // Validate slug format: lowercase alphanumeric with hyphens, 3-30 chars
@@ -26,6 +28,8 @@ function generateSlugFromName(name: string): string {
 export function Dashboard() {
   const navigate = useNavigate();
   const account = useActiveAccount();
+  const { selectedChainId, getChainConfig } = useChainContext();
+  const { getSolanaAddress } = useX402Payment();
 
   // Multi-server state
   const [myServers, setMyServers] = useState<ServerEntry[]>([]);
@@ -48,10 +52,10 @@ export function Dashboard() {
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
   useEffect(() => {
-    if (account) {
+    if (account || getSolanaAddress()) {
       loadMyServers();
     }
-  }, [account]);
+  }, [account, selectedChainId, getSolanaAddress]);
 
   // Auto-generate slug from name (only if not manually edited)
   useEffect(() => {
@@ -63,17 +67,48 @@ export function Dashboard() {
   const loadMyServers = async () => {
     try {
       setLoading(true);
-      const allServers = await getAllServers();
+      // Use chain-filtered endpoint if a chain is selected
+      const allServers = selectedChainId
+        ? await getServersByChain(selectedChainId)
+        : await getAllServers();
+
+      console.log(`[Dashboard] Chain: ${selectedChainId}, Total servers fetched: ${allServers.length}`);
+      console.log(`[Dashboard] Servers:`, allServers);
+
+      // Determine the current chain config to check if it's Solana
+      const currentChainConfig = selectedChainId ? getChainConfig(selectedChainId) : null;
+      const isSolanaChain = currentChainConfig?.chainType === 'solana';
+
+      // Get the appropriate user address based on chain type
+      const userAddress = isSolanaChain ? getSolanaAddress() : account?.address;
+
+      console.log(`[Dashboard] Chain type: ${currentChainConfig?.chainType}, User address: ${userAddress}`);
+
       // Filter all servers created by current user
-      if (account) {
+      if (userAddress) {
+        console.log(`[Dashboard] Filtering for user: ${userAddress}`);
         const userServers = allServers.filter(
-          (server) => server.builder.toLowerCase() === account.address.toLowerCase()
+          (server) => {
+            // For EVM addresses, compare case-insensitively
+            // For Solana addresses, compare case-sensitively (base58 is case-sensitive)
+            const isEvmAddress = server.builder.startsWith('0x');
+            const match = isEvmAddress
+              ? server.builder.toLowerCase() === userAddress.toLowerCase()
+              : server.builder === userAddress;
+            console.log(`[Dashboard] Server ${server.slug} builder: ${server.builder}, userAddress: ${userAddress}, isEvm: ${isEvmAddress}, match: ${match}`);
+            return match;
+          }
         );
+        console.log(`[Dashboard] User servers found: ${userServers.length}`);
         setMyServers(userServers);
         // Reset selection if current index is out of bounds
         if (selectedServerIndex >= userServers.length) {
           setSelectedServerIndex(0);
         }
+      } else {
+        // No wallet connected for this chain
+        console.log(`[Dashboard] No wallet address available for chain ${selectedChainId}`);
+        setMyServers([]);
       }
     } catch (error) {
       console.error("Failed to load servers:", error);
@@ -177,12 +212,17 @@ export function Dashboard() {
     }
   };
 
-  if (!account) {
+  // Check if user has appropriate wallet connected for selected chain
+  const currentChainConfig = selectedChainId ? getChainConfig(selectedChainId) : null;
+  const isSolanaChain = currentChainConfig?.chainType === 'solana';
+  const userAddress = isSolanaChain ? getSolanaAddress() : account?.address;
+
+  if (!userAddress) {
     return (
       <div className="dashboard-page">
         <div className="connect-prompt">
           <h2>👋 Connect Your Wallet</h2>
-          <p>Please connect your wallet to view your dashboard</p>
+          <p>Please connect your {isSolanaChain ? 'Solana' : 'EVM'} wallet to view your dashboard</p>
         </div>
       </div>
     );
@@ -397,11 +437,13 @@ export function Dashboard() {
           <div className="wallet-info-card">
             <div className="info-row">
               <span className="info-label">Address:</span>
-              <span className="info-value">{account.address}</span>
+              <span className="info-value">{userAddress}</span>
             </div>
             <div className="info-row">
               <span className="info-label">Network:</span>
-              <span className="info-value">Base Sepolia</span>
+              <span className="info-value">
+                {selectedChainId ? (getChainConfig(selectedChainId)?.name || selectedChainId) : "Not selected"}
+              </span>
             </div>
             <div className="info-row">
               <span className="info-label">Servers:</span>
