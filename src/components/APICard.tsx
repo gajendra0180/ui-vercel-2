@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { ServerEntry } from "../utils/api";
+import { ChainBadge } from "./ChainSelector";
 import "./APICard.css";
 
 interface APICardProps {
@@ -113,6 +114,11 @@ function APICardComponent({ server, onViewDetails, onTryServer, variant = "grid"
         <div>
           <div className="api-meta">
             <span className={`tier-pill ${tierInfo.className}`}>{tierInfo.label}</span>
+            <ChainBadge
+              chainId={server.chainId}
+              chainType={server.chainType}
+              size="small"
+            />
             <span className="builder-pill">by {builderShort}</span>
           </div>
           <h3>{server.name}</h3>

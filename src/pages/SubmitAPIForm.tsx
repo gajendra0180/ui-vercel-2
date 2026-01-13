@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useActiveAccount, useActiveWalletChain, useSendTransaction, ConnectButton } from "thirdweb/react";
 import { getContract, prepareContractCall, readContract } from "thirdweb";
@@ -12,6 +12,14 @@ import { checkServerSlugExists, getChains, ChainConfig } from "../utils/api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Tooltip } from "../components/Tooltip";
 import { ChainSelector, ChainBadge } from "../components/ChainSelector";
+import { useChainContext } from "../contexts/ChainContext";
+import { useX402Payment } from "../hooks/useX402Payment";
+import {
+  createTokenTransaction,
+  getConnection,
+  getMintPDA,
+} from "../contracts/solanaIaoFactory";
+import { Connection, PublicKey } from "@solana/web3.js";
 import "./SubmitAPIForm.css";
 
 // @ts-ignore - Vite env variable
@@ -69,6 +77,12 @@ export function SubmitAPIForm() {
   const account = useActiveAccount();
   const chain = useActiveWalletChain();
   const { mutate: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
+
+  // Solana wallet support
+  const { isSolanaWalletAvailable, connectSolanaWallet, getSolanaAddress } = useX402Payment();
+  const [solanaAddress, setSolanaAddress] = useState<string | null>(null);
+  const [solanaConnecting, setSolanaConnecting] = useState(false);
+  const [solanaTransactionPending, setSolanaTransactionPending] = useState(false);
   
   // API entry for the form
   interface FormApiEntry {
@@ -87,33 +101,54 @@ export function SubmitAPIForm() {
     tags: [] as string[],
   });
 
-  // Chain selection state
-  const [selectedChainId, setSelectedChainId] = useState<string>("84532"); // Default to Base Sepolia
-  const [chains, setChains] = useState<ChainConfig[]>([]);
-  const [loadingChains, setLoadingChains] = useState(true);
+  // Use global chain context from navbar
+  const { selectedChainId, chains, loading: loadingChains } = useChainContext();
 
-  // Load available chains on mount
+  // Check Solana wallet connection status
   useEffect(() => {
-    const loadChains = async () => {
-      try {
-        setLoadingChains(true);
-        const availableChains = await getChains();
-        setChains(availableChains);
-        // Set default to first available chain
-        if (availableChains.length > 0 && !availableChains.find(c => c.chainId === selectedChainId)) {
-          setSelectedChainId(availableChains[0].chainId);
-        }
-      } catch (err) {
-        console.error("Failed to load chains:", err);
-      } finally {
-        setLoadingChains(false);
-      }
+    const checkSolanaWallet = () => {
+      const address = getSolanaAddress();
+      setSolanaAddress(address);
     };
-    loadChains();
-  }, []);
+    checkSolanaWallet();
+    // Check periodically for wallet connection changes
+    const interval = setInterval(checkSolanaWallet, 1000);
+    return () => clearInterval(interval);
+  }, [getSolanaAddress]);
+
+  // Handle Solana wallet connection
+  const handleConnectSolana = async () => {
+    console.log("handleConnectSolana called");
+    try {
+      setSolanaConnecting(true);
+      setError(null);
+      console.log("Calling connectSolanaWallet...");
+      const address = await connectSolanaWallet();
+      console.log("Got address:", address);
+      if (address) {
+        setSolanaAddress(address);
+      } else {
+        setError("Failed to get wallet address. Please try again.");
+      }
+    } catch (err: any) {
+      console.error("handleConnectSolana error:", err);
+      setError(err.message || "Failed to connect Solana wallet");
+    } finally {
+      setSolanaConnecting(false);
+    }
+  };
 
   // Get current chain config
   const currentChainConfig = chains.find(c => c.chainId === selectedChainId);
+
+  // Determine if wallet is connected based on selected chain type
+  const isWalletConnected = currentChainConfig?.chainType === "solana"
+    ? !!solanaAddress
+    : !!account;
+
+  const connectedAddress = currentChainConfig?.chainType === "solana"
+    ? solanaAddress
+    : account?.address;
 
   // Support multiple APIs
   const [apis, setApis] = useState<FormApiEntry[]>([
@@ -267,7 +302,7 @@ export function SubmitAPIForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!account) {
+    if (!isWalletConnected) {
       setError("Please connect your wallet first");
       return;
     }
@@ -284,11 +319,160 @@ export function SubmitAPIForm() {
         return;
       }
     }
-    // For Solana, the smart contract flow is different - handled separately
-    // Currently only EVM token creation is supported via the factory contract
+
+    // For Solana, check Solana wallet is connected
+    if (currentChainConfig?.chainType === "solana") {
+      if (!solanaAddress) {
+        setError("Please connect your Phantom wallet first");
+        return;
+      }
+    }
 
     // Show confirmation dialog before proceeding
     setShowRegisterConfirm(true);
+  };
+
+  // Handle Solana token creation
+  const handleSolanaTokenCreation = async () => {
+    if (!solanaAddress || !currentChainConfig) {
+      setError("Solana wallet not connected");
+      setShowRegisterConfirm(false);
+      return;
+    }
+
+    try {
+      setError(null);
+      setSuccess(false);
+      setSolanaTransactionPending(true);
+
+      console.log("📝 Preparing Solana transaction with params:", {
+        name: formData.name,
+        slug: formData.slug,
+        symbol: formData.symbol,
+        builder: solanaAddress,
+      });
+
+      // Pre-check: Validate registration data BEFORE signing transaction
+      const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+
+      const validationPayload = {
+        serverSlug: formData.slug.trim(),
+        builder: solanaAddress,
+        chainId: selectedChainId,
+        tags: formData.tags.length > 0 ? formData.tags : undefined,
+        apis: apis.map(api => ({
+          slug: api.slug.trim(),
+          apiUrl: api.apiUrl.trim(),
+          fee: parseUnits(api.fee, 6).toString(),
+        })),
+      };
+
+      console.log("🔍 Validating registration data...");
+      const validationResponse = await fetch(`${baseUrl}/api/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validationPayload),
+      });
+
+      if (!validationResponse.ok) {
+        const errorData = await validationResponse.json();
+        setError(errorData.message || errorData.error || "Validation failed");
+        setShowRegisterConfirm(false);
+        return;
+      }
+
+      console.log("✅ Validation passed, creating Solana transaction...");
+
+      // Get Solana connection
+      const rpcUrl = currentChainConfig.rpcUrl || "https://api.devnet.solana.com";
+      const connection = new Connection(rpcUrl, "confirmed");
+
+      // Create the transaction
+      const builderPubkey = new PublicKey(solanaAddress);
+      const { transaction, mintAddress, tokenStateAddress } = await createTokenTransaction(
+        connection,
+        builderPubkey,
+        formData.slug.trim(),
+        formData.name.trim(),
+        formData.symbol.trim()
+      );
+
+      console.log("📤 Requesting Phantom to sign transaction...");
+      console.log("Mint address will be:", mintAddress.toBase58());
+
+      // Get Phantom wallet
+      const solana = (window as any).solana || (window as any).phantom?.solana;
+      if (!solana) {
+        throw new Error("Phantom wallet not found");
+      }
+
+      // Close confirmation dialog
+      setShowRegisterConfirm(false);
+
+      // Sign and send transaction
+      const { signature } = await solana.signAndSendTransaction(transaction);
+
+      console.log("✅ Transaction sent:", signature);
+      setTxHash(signature);
+
+      // Wait for confirmation
+      console.log("⏳ Waiting for confirmation...");
+      const confirmation = await connection.confirmTransaction(signature, "confirmed");
+
+      if (confirmation.value.err) {
+        throw new Error("Transaction failed: " + JSON.stringify(confirmation.value.err));
+      }
+
+      console.log("✅ Transaction confirmed!");
+      setSuccess(true);
+
+      // Register with backend
+      const registerPayload = {
+        tokenAddress: mintAddress.toBase58(),
+        serverSlug: formData.slug.toLowerCase().trim(),
+        name: formData.name.trim(),
+        symbol: formData.symbol.trim(),
+        chainId: selectedChainId,
+        tags: formData.tags.length > 0 ? formData.tags : undefined,
+        apis: apis.map(api => ({
+          slug: api.slug.toLowerCase().trim(),
+          name: api.name.trim(),
+          apiUrl: api.apiUrl.trim(),
+          description: api.description.trim(),
+          fee: parseUnits(api.fee, 6).toString(),
+        })),
+        builder: solanaAddress,
+        paymentToken: currentChainConfig.paymentTokenAddress,
+      };
+
+      console.log("📝 Registering server with backend:", registerPayload);
+
+      const registerResponse = await fetch(`${baseUrl}/api/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(registerPayload),
+      });
+
+      if (registerResponse.ok) {
+        console.log("✅ Server registered successfully with backend");
+      } else {
+        const errorJson = await registerResponse.json();
+        console.error("⚠️ Backend registration failed:", errorJson);
+        setError(`Transaction succeeded but registration failed: ${errorJson.message || errorJson.error}`);
+      }
+
+      // Redirect after success
+      setTimeout(() => {
+        navigate("/");
+      }, 3000);
+
+    } catch (err: any) {
+      console.error("❌ Solana transaction error:", err);
+      setError(err.message || "Failed to create token on Solana");
+      setShowRegisterConfirm(false);
+    } finally {
+      setSolanaTransactionPending(false);
+    }
   };
 
   const handleConfirmRegister = async () => {
@@ -582,16 +766,57 @@ export function SubmitAPIForm() {
     }
   };
 
-  if (!account) {
+  if (!isWalletConnected) {
     return (
       <div className="submit-page">
         <div className="connect-prompt">
           <h2>👋 Connect Your Wallet</h2>
           <p>Please connect your wallet to register a server</p>
-          <div className="connect-button-container">
-            <ConnectButton client={thirdwebClient} chain={baseSepolia} />
+
+          {/* Chain Selection for wallet connection */}
+          <div className="chain-select-connect" style={{ marginBottom: '20px' }}>
+            <label style={{ marginBottom: '8px', display: 'block' }}>Select Chain:</label>
+            <div className="chain-selector-form" style={{ justifyContent: 'center' }}>
+              {chains.map((c) => (
+                <button
+                  key={c.chainId}
+                  type="button"
+                  className={`chain-option ${selectedChainId === c.chainId ? "chain-option--selected" : ""}`}
+                  onClick={() => setSelectedChainId(c.chainId)}
+                >
+                  <span className="chain-option__icon">
+                    {c.chainType === "solana" ? "◎" : "⬡"}
+                  </span>
+                  <span className="chain-option__name">{c.shortName || c.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <p className="connect-hint">Click the button above to connect your wallet (Rabbit, MetaMask, etc.)</p>
+
+          <div className="connect-button-container">
+            {currentChainConfig?.chainType === "solana" ? (
+              <button
+                className="btn btn-primary btn-large"
+                onClick={handleConnectSolana}
+                disabled={solanaConnecting}
+                style={{ minWidth: '200px' }}
+              >
+                {solanaConnecting ? "Connecting..." : "🟣 Connect Phantom"}
+              </button>
+            ) : (
+              <ConnectButton client={thirdwebClient} chain={baseSepolia} />
+            )}
+          </div>
+          <p className="connect-hint">
+            {currentChainConfig?.chainType === "solana"
+              ? "Connect your Phantom or Solflare wallet"
+              : "Connect your MetaMask, Rabby, or other EVM wallet"}
+          </p>
+          {!isSolanaWalletAvailable() && currentChainConfig?.chainType === "solana" && (
+            <p className="connect-hint" style={{ color: '#f59e0b' }}>
+              ⚠️ Phantom wallet not detected. <a href="https://phantom.app/" target="_blank" rel="noopener noreferrer" style={{ color: '#8b5cf6' }}>Install Phantom</a>
+            </p>
+          )}
         </div>
       </div>
     );
@@ -614,69 +839,13 @@ export function SubmitAPIForm() {
       </div>
 
       <div className="submit-header">
-        <h1>🖥️ Register Your Server</h1>
-        <p>Create your server and list your APIs on APIX</p>
-        {currentChainConfig && (
-          <div className="network-warning">
-            {currentChainConfig.chainType === "evm" ? (
-              <>⚠️ Requires {currentChainConfig.name}. Switch networks in your EVM wallet before submitting.</>
-            ) : (
-              <>⚠️ Requires Solana ({currentChainConfig.name}). Connect your Solana wallet (Phantom) before submitting.</>
-            )}
-          </div>
-        )}
+        <h1>Create Server</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="submit-form">
-        {/* Chain Selection */}
         <div className="form-section">
-          <h3>Blockchain Network</h3>
-          <p className="section-description">
-            Select which blockchain your server will operate on. This determines the payment token and smart contracts used.
-          </p>
           <div className="form-group">
-            <label>Select Chain *</label>
-            {loadingChains ? (
-              <div className="loading-chains">Loading available chains...</div>
-            ) : (
-              <div className="chain-selector-form">
-                {chains.map((chain) => (
-                  <button
-                    key={chain.chainId}
-                    type="button"
-                    className={`chain-option ${selectedChainId === chain.chainId ? "chain-option--selected" : ""}`}
-                    onClick={() => setSelectedChainId(chain.chainId)}
-                  >
-                    <span className="chain-option__icon">
-                      {chain.chainType === "solana" ? "◎" : "⬡"}
-                    </span>
-                    <span className="chain-option__info">
-                      <span className="chain-option__name">{chain.name}</span>
-                      <span className="chain-option__type">{chain.chainType.toUpperCase()}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {currentChainConfig && (
-              <small className="chain-info">
-                {currentChainConfig.chainType === "evm" ? (
-                  <>Connect an EVM wallet (MetaMask, Coinbase Wallet) to register on {currentChainConfig.name}</>
-                ) : (
-                  <>Connect a Solana wallet (Phantom) to register on {currentChainConfig.name}</>
-                )}
-              </small>
-            )}
-          </div>
-        </div>
-
-        <div className="form-section">
-          <h3>Server Information</h3>
-          <p className="section-description">
-            This creates your server. You can register multiple APIs under this server.
-          </p>
-          <div className="form-group">
-            <label htmlFor="name">Server Name *</label>
+            <label htmlFor="name">Name</label>
             <input
               id="name"
               name="name"
@@ -690,12 +859,7 @@ export function SubmitAPIForm() {
           </div>
 
           <div className="form-group">
-            <Tooltip
-              text="A unique identifier for your server used in API endpoints. Must be lowercase, alphanumeric with hyphens (3-30 characters)"
-              position="top"
-            >
-              <label htmlFor="slug">Server Slug *</label>
-            </Tooltip>
+            <label htmlFor="slug">Slug</label>
             <input
               id="slug"
               name="slug"
@@ -707,16 +871,11 @@ export function SubmitAPIForm() {
               className="input"
               maxLength={30}
             />
-            <small>
-              Used in URL: <code>/api/{formData.slug || "your-slug"}/api-name</code>
-              <br />
-              3-30 chars, lowercase alphanumeric with hyphens
-            </small>
             {slugError && <span className="field-error">{slugError}</span>}
           </div>
 
           <div className="form-group">
-            <label htmlFor="symbol">Token Symbol *</label>
+            <label htmlFor="symbol">Symbol</label>
             <input
               id="symbol"
               name="symbol"
@@ -731,10 +890,7 @@ export function SubmitAPIForm() {
           </div>
 
           <div className="form-group">
-            <label>Categories (Optional)</label>
-            <p className="section-description" style={{ marginTop: 0, marginBottom: '12px' }}>
-              Select one or more categories to help users discover your server
-            </p>
+            <label>Categories</label>
             <div className="tag-selection">
               {VALID_CATEGORIES.map((tag) => (
                 <label key={tag} className="tag-checkbox">
@@ -751,28 +907,22 @@ export function SubmitAPIForm() {
         </div>
 
         <div className="form-section">
-          <h3>API Endpoints</h3>
-          <p className="section-description">
-            Register one or more APIs under your server. Each API can have its own custom fee.
-          </p>
-          
           {apis.map((api, index) => (
             <div key={index} className="api-entry">
-              <div className="api-entry-header">
-                <span className="api-number">API #{index + 1}</span>
-                {apis.length > 1 && (
-                  <button 
-                    type="button" 
+              {apis.length > 1 && (
+                <div className="api-entry-header">
+                  <button
+                    type="button"
                     className="btn btn-danger btn-small"
                     onClick={() => removeApi(index)}
                   >
-                    ✕ Remove
+                    Remove
                   </button>
-                )}
-              </div>
-              
+                </div>
+              )}
+
               <div className="form-group">
-                <label>API Name *</label>
+                <label>API Name</label>
                 <input
                   type="text"
                   value={api.name}
@@ -784,7 +934,7 @@ export function SubmitAPIForm() {
               </div>
 
               <div className="form-group">
-                <label>API Slug *</label>
+                <label>Slug</label>
                 <input
                   type="text"
                   value={api.slug}
@@ -794,13 +944,10 @@ export function SubmitAPIForm() {
                   className="input"
                   maxLength={30}
                 />
-                <small>
-                  URL: <code>/api/{formData.slug || "server"}/{api.slug || "api-slug"}</code>
-                </small>
               </div>
 
               <div className="form-group">
-                <label>API Endpoint URL *</label>
+                <label>Endpoint URL</label>
                 <input
                   type="url"
                   value={api.apiUrl}
@@ -809,11 +956,10 @@ export function SubmitAPIForm() {
                   required
                   className="input"
                 />
-                <small>Your backend endpoint (kept private, never exposed to users)</small>
               </div>
 
               <div className="form-group">
-                <label>Description *</label>
+                <label>Description</label>
                 <textarea
                   value={api.description}
                   onChange={(e) => handleApiChange(index, 'description', e.target.value)}
@@ -825,7 +971,7 @@ export function SubmitAPIForm() {
               </div>
 
               <div className="form-group">
-                <label>Fee (USDC) *</label>
+                <label>Fee (USDC)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -836,35 +982,37 @@ export function SubmitAPIForm() {
                   required
                   className="input"
                 />
-                <small>Amount users pay per call to this API (in USDC)</small>
               </div>
             </div>
           ))}
           
-          <button 
-            type="button" 
+          <button
+            type="button"
             className="btn btn-secondary"
             onClick={addApi}
           >
-            ➕ Add Another API
+            Add API
           </button>
         </div>
 
 
         {error && (
           <div className="error-box">
-            <strong>❌ Error:</strong> {error}
+            {error}
           </div>
         )}
 
         {success && (
           <div className="success-box">
-            <strong>✅ Success!</strong> Your server has been registered.
+            Server registered successfully.
             {txHash && (
               <p>
                 Transaction:{" "}
                 <a
-                  href={`https://sepolia.basescan.org/tx/${txHash}`}
+                  href={currentChainConfig?.chainType === "solana"
+                    ? `https://explorer.solana.com/tx/${txHash}?cluster=devnet`
+                    : `https://sepolia.basescan.org/tx/${txHash}`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -879,9 +1027,9 @@ export function SubmitAPIForm() {
         <button
           type="submit"
           className="btn btn-primary btn-large"
-          disabled={isTransactionPending || success}
+          disabled={isTransactionPending || solanaTransactionPending || success}
         >
-          {isTransactionPending
+          {isTransactionPending || solanaTransactionPending
             ? "Submitting Transaction..."
             : success
             ? "Submitted!"
@@ -929,7 +1077,7 @@ export function SubmitAPIForm() {
         variant="danger"
         confirmText="Yes, Register Server"
         cancelText="Cancel"
-        onConfirm={handleConfirmRegister}
+        onConfirm={currentChainConfig?.chainType === "solana" ? handleSolanaTokenCreation : handleConfirmRegister}
         onCancel={() => setShowRegisterConfirm(false)}
       />
     </div>

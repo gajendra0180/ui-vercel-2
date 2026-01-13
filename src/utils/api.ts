@@ -78,10 +78,15 @@ export interface ChainConfig {
   chainId: string;
   chainType: "evm" | "solana";
   name: string;
+  shortName?: string;
   factoryAddress: string;
   paymentTokenAddress: string;
+  paymentTokenSymbol?: string;
+  paymentTokenDecimals?: number;
   rpcUrl: string;
   explorerUrl: string;
+  explorerTxPath?: string;
+  explorerAddressPath?: string;
   enabled: boolean;
 }
 
@@ -646,8 +651,12 @@ export async function createAgent(data: {
 /**
  * Get all available servers (for tool selection)
  * Includes all APIs that can be added to agents
+ * @param chainId - Optional chain ID to filter servers by blockchain
  */
-export async function getAvailableServersForTools(): Promise<ServerEntry[]> {
+export async function getAvailableServersForTools(chainId?: string | null): Promise<ServerEntry[]> {
+  if (chainId) {
+    return getServersByChain(chainId);
+  }
   return getAllServers();
 }
 

@@ -9,7 +9,10 @@ import {
   sortAgents,
   AgentWithStats,
   AgentSortBy,
+  getAllServers,
+  ServerEntry,
 } from "../utils/api";
+import { useChainContext } from "../contexts/ChainContext";
 import { Spinner } from "../components/Spinner";
 import { EmptyState } from "../components/EmptyState";
 import "./AgentMarketplace.css";
@@ -17,10 +20,12 @@ import "./AgentMarketplace.css";
 export function AgentMarketplace() {
   const navigate = useNavigate();
   const account = useActiveAccount();
+  const { selectedChainId } = useChainContext();
 
   // Data state
   const [allAgents, setAllAgents] = useState<AgentWithStats[]>([]);
   const [trendingAgents, setTrendingAgents] = useState<AgentWithStats[]>([]);
+  const [servers, setServers] = useState<ServerEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filter/search state
@@ -39,12 +44,14 @@ export function AgentMarketplace() {
   const loadAgents = async () => {
     try {
       setLoading(true);
-      const [trending, allPublic] = await Promise.all([
+      const [trending, allPublic, allServers] = await Promise.all([
         getTrendingAgents(10),
         getPublicAgents(),
+        getAllServers(),
       ]);
       setTrendingAgents(trending);
       setAllAgents(allPublic);
+      setServers(allServers);
     } catch (error) {
       console.error("Failed to load agents:", error);
     } finally {
@@ -52,11 +59,34 @@ export function AgentMarketplace() {
     }
   };
 
+  // Helper function to check if an agent belongs to the selected chain
+  const agentBelongsToChain = (agent: AgentWithStats, chainId: string | null): boolean => {
+    // If no chain is selected, show all agents
+    if (!chainId) {
+      return true;
+    }
+
+    // If agent has no tools, exclude it
+    if (!agent.availableTools || agent.availableTools.length === 0) {
+      return false;
+    }
+
+    // Check if all agent's tools belong to servers on the selected chain
+    return agent.availableTools.every((toolId) => {
+      const [serverSlug] = toolId.split('/');
+      const server = servers.find(s => s.slug === serverSlug);
+      return server && server.chainId === chainId;
+    });
+  };
+
   // Compute filtered agents
   const filteredAgents = useMemo(() => {
     const source = showTrendingOnly ? trendingAgents : allAgents;
 
     let results = [...source];
+
+    // Apply chain filter
+    results = results.filter(agent => agentBelongsToChain(agent, selectedChainId));
 
     // Apply search
     results = searchAgents(results, searchQuery);
@@ -71,6 +101,8 @@ export function AgentMarketplace() {
   }, [
     allAgents,
     trendingAgents,
+    servers,
+    selectedChainId,
     showTrendingOnly,
     searchQuery,
     providerFilter,

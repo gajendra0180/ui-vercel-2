@@ -3,6 +3,23 @@ import { useState } from "react";
 import { useActiveAccount, useActiveWallet } from "thirdweb/react";
 import { baseSepolia } from "thirdweb/chains";
 import { USDC_ADDRESS } from "../constants/addresses";
+import {
+  Connection,
+  PublicKey,
+  Transaction,
+  SystemProgram,
+} from "@solana/web3.js";
+import {
+  createTransferInstruction,
+  getAssociatedTokenAddress,
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
+} from "@solana/spl-token";
+
+// Solana devnet USDC (devnet faucet USDC)
+const SOLANA_USDC_MINT = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+const SOLANA_DEVNET_RPC = "https://api.devnet.solana.com";
 
 /**
  * Payment authorization for EIP-3009 transfers (EVM)
@@ -156,8 +173,8 @@ export function useX402Payment() {
   };
 
   /**
-   * Sign Solana payment authorization
-   * Uses Ed25519 message signing via Phantom or other Solana wallets
+   * Sign Solana payment transaction
+   * Creates and signs a real SPL token transfer transaction
    */
   const signSolanaPayment = async (
     payTo: string,
@@ -171,49 +188,105 @@ export function useX402Payment() {
       throw new Error("Solana wallet not connected. Please connect Phantom or another Solana wallet.");
     }
 
-    // Generate authorization parameters
-    const validAfter = Math.floor(Date.now() / 1000) - 60;
-    const validBefore = validAfter + 3600;
-    const nonceArray = new Uint8Array(32);
-    crypto.getRandomValues(nonceArray);
-    // Convert to base58-like string for Solana
-    const nonceBase58 = btoa(String.fromCharCode(...nonceArray)).replace(/[+/=]/g, '');
+    const fromPubkey = solana.publicKey;
+    const toPubkey = new PublicKey(payTo);
 
-    // Create authorization message
-    const authorization = {
-      from: solana.publicKey.toString(),
-      to: payTo,
-      amount: amountValue,
-      validAfter,
-      validBefore,
-      nonce: nonceBase58,
-    };
+    // Parse amount (USDC has 6 decimals)
+    const amount = BigInt(amountValue);
 
-    // Create message to sign
-    const messageText = JSON.stringify({
-      type: "x402-payment",
-      version: x402Version,
-      ...authorization,
-    });
+    console.log("Creating Solana SPL token transfer transaction...");
+    console.log(`  From: ${fromPubkey.toString()}`);
+    console.log(`  To: ${toPubkey.toString()}`);
+    console.log(`  Amount: ${amount.toString()} (raw)`);
 
-    const messageBytes = new TextEncoder().encode(messageText);
+    // Connect to Solana devnet
+    const connection = new Connection(SOLANA_DEVNET_RPC, "confirmed");
 
-    console.log("Requesting Solana wallet to sign payment authorization...");
+    // Get associated token accounts
+    // allowOwnerOffCurve = true to support PDAs and program-owned addresses
+    const fromATA = await getAssociatedTokenAddress(
+      SOLANA_USDC_MINT,
+      fromPubkey,
+      true, // allowOwnerOffCurve
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
 
-    // Sign with Solana wallet
-    const { signature } = await solana.signMessage(messageBytes, "utf8");
+    const toATA = await getAssociatedTokenAddress(
+      SOLANA_USDC_MINT,
+      toPubkey,
+      true, // allowOwnerOffCurve - recipient may be a PDA
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
 
-    // Convert signature to base64
-    const signatureBase64 = btoa(String.fromCharCode(...signature));
+    console.log(`  From ATA: ${fromATA.toString()}`);
+    console.log(`  To ATA: ${toATA.toString()}`);
 
-    // Create payment proof
+    // Create transaction
+    const transaction = new Transaction();
+
+    // Check if recipient's ATA exists, if not create it
+    const toATAInfo = await connection.getAccountInfo(toATA);
+    if (!toATAInfo) {
+      console.log("  Creating recipient ATA...");
+      transaction.add(
+        createAssociatedTokenAccountInstruction(
+          fromPubkey, // payer
+          toATA, // ata
+          toPubkey, // owner
+          SOLANA_USDC_MINT, // mint
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
+    }
+
+    // Add transfer instruction
+    transaction.add(
+      createTransferInstruction(
+        fromATA, // source
+        toATA, // destination
+        fromPubkey, // owner
+        amount, // amount
+        [], // signers (empty for single signer)
+        TOKEN_PROGRAM_ID
+      )
+    );
+
+    // Get recent blockhash
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = fromPubkey;
+
+    console.log("Requesting Solana wallet to sign transaction...");
+
+    // Sign transaction with Phantom (returns a signed transaction)
+    const signedTransaction = await solana.signTransaction(transaction);
+
+    // Serialize the signed transaction
+    const serializedTransaction = signedTransaction.serialize();
+    const transactionBase64 = Buffer.from(serializedTransaction).toString("base64");
+
+    console.log("✅ Solana transaction signed successfully");
+
+    // Create payment proof with the signed transaction
     return {
       x402Version,
       scheme: "exact",
       network: "solana:devnet",
       payload: {
-        signature: signatureBase64,
-        authorization,
+        // The signed transaction bytes (base64 encoded)
+        signedTransaction: transactionBase64,
+        // Authorization info for backend verification
+        authorization: {
+          from: fromPubkey.toString(),
+          to: payTo,
+          amount: amountValue,
+          mint: SOLANA_USDC_MINT.toString(),
+          blockhash,
+          lastValidBlockHeight,
+        },
       },
     };
   };
@@ -369,18 +442,97 @@ export function useX402Payment() {
    * Connect Solana wallet (Phantom)
    */
   const connectSolanaWallet = async (): Promise<string | null> => {
-    const solana = (window as any).solana || (window as any).phantom?.solana;
+    // Try multiple ways to access Phantom
+    const phantom = (window as any).phantom?.solana;
+    const solana = (window as any).solana;
+    const provider = phantom || solana;
 
-    if (!solana) {
-      throw new Error("Phantom wallet not found. Please install Phantom.");
+    console.log("Attempting to connect Solana wallet...", {
+      phantom: !!phantom,
+      solana: !!solana,
+      isPhantom: provider?.isPhantom,
+      isConnected: provider?.isConnected
+    });
+
+    if (!provider) {
+      throw new Error("Phantom wallet not found. Please install Phantom from phantom.app");
+    }
+
+    // If already connected, just return the address
+    if (provider.isConnected && provider.publicKey) {
+      const address = provider.publicKey.toString();
+      console.log("Already connected to Solana wallet:", address);
+      return address;
     }
 
     try {
-      const response = await solana.connect();
-      return response.publicKey.toString();
-    } catch (err) {
-      console.error("Failed to connect Solana wallet:", err);
-      return null;
+      // Method 1: Try the request API (newer standard)
+      if (provider.request) {
+        console.log("Trying request API method...");
+        try {
+          const response = await provider.request({ method: "connect" });
+          if (response.publicKey) {
+            const address = response.publicKey.toString();
+            console.log("Request API connect succeeded:", address);
+            return address;
+          }
+        } catch (reqErr: any) {
+          console.log("Request API failed:", reqErr.message);
+        }
+      }
+
+      // Method 2: Try signMessage to trigger connection popup
+      console.log("Trying signMessage trigger...");
+      try {
+        // This often triggers the connection popup when connect() fails
+        const message = new TextEncoder().encode("Connect to APIX");
+        await provider.signMessage(message, "utf8");
+        // If we get here, we're connected
+        if (provider.publicKey) {
+          const address = provider.publicKey.toString();
+          console.log("SignMessage trigger succeeded:", address);
+          return address;
+        }
+      } catch (signErr: any) {
+        // If user rejected, that's fine - they might still have connected
+        if (provider.publicKey) {
+          const address = provider.publicKey.toString();
+          console.log("Connected after signMessage attempt:", address);
+          return address;
+        }
+        console.log("SignMessage trigger failed:", signErr.message);
+      }
+
+      // Method 3: Standard connect
+      console.log("Trying standard connect...");
+      const response = await provider.connect();
+      const address = response.publicKey.toString();
+      console.log("Standard connect succeeded:", address);
+      return address;
+    } catch (err: any) {
+      console.error("All connection methods failed:", err);
+
+      // Check if somehow connected despite error
+      if (provider.publicKey) {
+        const address = provider.publicKey.toString();
+        console.log("Found publicKey despite error:", address);
+        return address;
+      }
+
+      // If it's a user rejection
+      if (err.code === 4001 || err.message?.includes("rejected") || err.message?.includes("denied")) {
+        throw new Error("Connection rejected. Please approve the connection in Phantom.");
+      }
+
+      // For "Unexpected error" - provide helpful instructions
+      if (err.message?.includes("Unexpected")) {
+        throw new Error(
+          "Phantom connection failed. Try: 1) Open Phantom extension, " +
+          "2) Settings > Trusted Apps > Remove localhost, 3) Refresh page, 4) Try again."
+        );
+      }
+
+      throw new Error(err.message || "Failed to connect Phantom wallet. Please try again.");
     }
   };
 

@@ -3,9 +3,11 @@ import { useActiveAccount } from 'thirdweb/react';
 import {
   ServerEntry,
   getAllServers,
+  getServersByChain,
   buildProxyUrl,
 } from '../utils/api';
 import { useX402Payment } from '../hooks/useX402Payment';
+import { useChainContext } from '../contexts/ChainContext';
 import ChatSidebar from '../components/ChatSidebar';
 import ChatMessage from '../components/ChatMessage';
 import ModelSelector, { LLMModel } from '../components/ModelSelector';
@@ -41,6 +43,7 @@ interface PlaygroundMessage {
 export const NewChatPlayground: React.FC = () => {
   const account = useActiveAccount();
   const { callAPIWithPayment, isProcessing } = useX402Payment();
+  const { selectedChainId } = useChainContext();
 
   // State
   const [messages, setMessages] = useState<PlaygroundMessage[]>([]);
@@ -58,10 +61,10 @@ export const NewChatPlayground: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load servers on mount
+  // Load servers on mount and when chain changes
   useEffect(() => {
     loadServers();
-  }, []);
+  }, [selectedChainId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -70,7 +73,9 @@ export const NewChatPlayground: React.FC = () => {
 
   const loadServers = async () => {
     try {
-      const allServers = await getAllServers();
+      const allServers = selectedChainId
+        ? await getServersByChain(selectedChainId)
+        : await getAllServers();
       setServers(allServers);
     } catch (err) {
       console.error('Failed to load servers:', err);

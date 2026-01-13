@@ -8,12 +8,22 @@ import { CodeBlock } from "../components/CodeBlock";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { Skeleton } from "../components/Skeleton";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
+import { useChainContext } from "../contexts/ChainContext";
 import "./APIDetailsPage.css";
 
 export function APIDetailsPage() {
   const { serverSlug } = useParams<{ serverSlug: string }>();
   const navigate = useNavigate();
-  const { callAPIWithPayment, isProcessing, isReady, account } = useX402Payment();
+  const { selectedChainId, setSelectedChain } = useChainContext();
+  const {
+    callAPIWithPayment,
+    isProcessing,
+    isReady,
+    account,
+    isSolanaWalletAvailable,
+    connectSolanaWallet,
+    getSolanaAddress
+  } = useX402Payment();
   const { copy, copied } = useCopyToClipboard();
 
   const [server, setServer] = useState<ServerEntry | null>(null);
@@ -27,6 +37,42 @@ export function APIDetailsPage() {
   const [queryParams, setQueryParams] = useState<string>("");
   const [metrics, setMetrics] = useState<ServerMetrics | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
+  const [solanaAddress, setSolanaAddress] = useState<string | null>(null);
+  const [solanaConnecting, setSolanaConnecting] = useState(false);
+
+  // Determine if this server is on Solana (using reliable chainType from backend)
+  const isSolanaServer = server?.chainType === "solana";
+
+  // Auto-switch chain when server loads (if accessing via direct URL)
+  useEffect(() => {
+    if (server && server.chainId && selectedChainId !== server.chainId) {
+      console.log(`Auto-switching chain from ${selectedChainId} to ${server.chainId} to match server`);
+      setSelectedChain(server.chainId);
+    }
+  }, [server, selectedChainId, setSelectedChain]);
+
+  // Check Solana wallet connection
+  useEffect(() => {
+    if (isSolanaServer) {
+      const checkSolana = () => setSolanaAddress(getSolanaAddress());
+      checkSolana();
+      const interval = setInterval(checkSolana, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isSolanaServer, getSolanaAddress]);
+
+  const handleConnectSolana = async () => {
+    try {
+      setSolanaConnecting(true);
+      setError(null);
+      const address = await connectSolanaWallet();
+      setSolanaAddress(address);
+    } catch (err: any) {
+      setError(err.message || "Failed to connect Solana wallet");
+    } finally {
+      setSolanaConnecting(false);
+    }
+  };
 
   useEffect(() => {
     if (serverSlug) {
@@ -102,9 +148,17 @@ export function APIDetailsPage() {
       return;
     }
 
-    if (!isReady || !account) {
-      setError("Please connect your wallet first");
-      return;
+    // Check wallet connection based on chain type
+    if (isSolanaServer) {
+      if (!solanaAddress) {
+        setError("Please connect your Phantom wallet first");
+        return;
+      }
+    } else {
+      if (!isReady || !account) {
+        setError("Please connect your wallet first");
+        return;
+      }
     }
 
     setTesting(true);
@@ -114,7 +168,7 @@ export function APIDetailsPage() {
     try {
       // Build URL with server slug and API slug
       let url = buildProxyUrl(serverSlug, selectedApiSlug);
-      
+
       // Append query parameters if provided
       if (queryParams.trim()) {
         const separator = url.includes("?") ? "&" : "?";
@@ -127,17 +181,18 @@ export function APIDetailsPage() {
         throw new Error("Selected API not found");
       }
       const apiFee = BigInt(api.fee);
-      
-      // Call API with payment - user will be prompted to sign
+
+      // Call API with payment - pass chain type for proper wallet selection
       const data = await callAPIWithPayment(
         url,
         apiFee,
-        server.id // receiver address (token address)
+        server.id, // receiver address (token address)
+        isSolanaServer ? "solana" : "evm"
       );
 
       setApiResult(data);
       setError(null);
-    } catch (err: unknown) {
+    } catch (err: any) {
       setError(err.message || "Failed to call API");
       console.error("API call error:", err);
     } finally {
@@ -321,11 +376,11 @@ export function APIDetailsPage() {
                 </div>
                 <div className="metric-item">
                   <span className="metric-label">Total USDC Paid</span>
-                  <span className="metric-value">${metrics.server.totalRevenueUSD.toFixed(2)}</span>
+                  <span className="metric-value">${(metrics.server.totalRevenueUSD ?? 0).toFixed(2)}</span>
                 </div>
                 <div className="metric-item">
                   <span className="metric-label">Average Latency</span>
-                  <span className="metric-value">{metrics.server.averageLatency.toFixed(0)}ms</span>
+                  <span className="metric-value">{(metrics.server.averageLatency ?? 0).toFixed(0)}ms</span>
                 </div>
                 <div className="metric-item">
                   <Tooltip
@@ -334,11 +389,11 @@ export function APIDetailsPage() {
                   >
                     <span className="metric-label">P95 Latency</span>
                   </Tooltip>
-                  <span className="metric-value">{metrics.server.p95Latency.toFixed(0)}ms</span>
+                  <span className="metric-value">{(metrics.server.p95Latency ?? 0).toFixed(0)}ms</span>
                 </div>
                 <div className="metric-item">
                   <span className="metric-label">Success Rate</span>
-                  <span className="metric-value">{metrics.server.successRate.toFixed(1)}%</span>
+                  <span className="metric-value">{(metrics.server.successRate ?? 0).toFixed(1)}%</span>
                 </div>
               </div>
             )}
@@ -364,15 +419,15 @@ export function APIDetailsPage() {
                     <div className="bonding-progress">
                       <div className="progress-bar-container">
                         <div 
-                          className="progress-bar" 
-                          style={{ width: `${Math.min(metrics.contract.bondingProgress, 100)}%` }}
+                          className="progress-bar"
+                          style={{ width: `${Math.min(metrics.contract.bondingProgress ?? 0, 100)}%` }}
                         />
                       </div>
                   <div className="progress-info">
                     <span>
-                      {metrics.contract.bondingProgress < 0.01 
-                        ? metrics.contract.bondingProgress.toFixed(6) + '%' 
-                        : metrics.contract.bondingProgress.toFixed(2) + '%'}
+                      {(metrics.contract.bondingProgress ?? 0) < 0.01
+                        ? (metrics.contract.bondingProgress ?? 0).toFixed(6) + '%'
+                        : (metrics.contract.bondingProgress ?? 0).toFixed(2) + '%'}
                     </span>
                     <span className="progress-details">
                       {formatBigNumber(metrics.contract.totalTokensDistributed)} / {formatBigNumber(metrics.contract.graduationThreshold)} tokens
@@ -668,17 +723,45 @@ print(data)`}
                 {testingWithoutPayment ? "Loading..." : "🔍 Test Metadata (No Payment)"}
               </button>
 
+              {/* Show Phantom connect button for Solana servers */}
+              {isSolanaServer && !solanaAddress && (
+                <button
+                  className="btn btn-primary btn-large"
+                  onClick={handleConnectSolana}
+                  disabled={solanaConnecting}
+                  style={{ background: 'linear-gradient(135deg, #9945FF 0%, #14F195 100%)' }}
+                >
+                  {solanaConnecting ? "Connecting..." : "🟣 Connect Phantom Wallet"}
+                </button>
+              )}
+
               <button
                 className="btn btn-primary btn-large"
                 onClick={handleTestAPI}
-                disabled={testing || isProcessing || !isReady || !selectedApiSlug}
+                disabled={
+                  testing ||
+                  isProcessing ||
+                  !selectedApiSlug ||
+                  (isSolanaServer ? !solanaAddress : !isReady)
+                }
               >
                 {testing || isProcessing ? "Signing Transaction..." : `💳 Pay & Test: ${selectedApi?.name || 'Select API'}`}
               </button>
             </div>
 
-            {!isReady && (
-              <p className="warning-text">⚠️ Please connect your wallet to test APIs. You'll be prompted to sign the payment transaction.</p>
+            {/* Wallet connection status/prompt */}
+            {isSolanaServer ? (
+              solanaAddress ? (
+                <p className="success-text" style={{ color: '#4ade80' }}>
+                  ✅ Phantom Connected: {solanaAddress.slice(0, 4)}...{solanaAddress.slice(-4)}
+                </p>
+              ) : (
+                <p className="warning-text">⚠️ Connect your Phantom wallet to test this Solana API.</p>
+              )
+            ) : (
+              !isReady && (
+                <p className="warning-text">⚠️ Please connect your wallet to test APIs. You'll be prompted to sign the payment transaction.</p>
+              )
             )}
           </div>
 

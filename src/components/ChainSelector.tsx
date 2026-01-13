@@ -61,6 +61,7 @@ export function ChainSelector({
   const [chains, setChains] = useState<ChainConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     fetchChains();
@@ -119,22 +120,128 @@ export function ChainSelector({
   }
 
   if (variant === "dropdown") {
+    const selectedChain = chains.find((c) => c.chainId === selectedChainId);
+    const selectedMeta = selectedChain ? getChainMeta(selectedChain.chainId) : null;
+
     return (
       <div className={`chain-selector chain-selector--dropdown ${disabled ? "chain-selector--disabled" : ""}`}>
-        <select
-          value={selectedChainId || "all"}
-          onChange={(e) => onSelectChain(e.target.value === "all" ? null : e.target.value)}
+        <button
+          className="chain-dropdown__trigger"
+          onClick={() => setIsOpen(!isOpen)}
           disabled={disabled}
-          className="chain-selector__select"
           aria-label="Select blockchain network"
+          aria-expanded={isOpen}
         >
-          {showAllOption && <option value="all">All Chains</option>}
-          {chains.map((chain) => (
-            <option key={chain.chainId} value={chain.chainId}>
-              {chain.name} ({chain.chainType.toUpperCase()})
-            </option>
-          ))}
-        </select>
+          {selectedChain ? (
+            <>
+              {selectedMeta?.icon ? (
+                <img
+                  src={selectedMeta.icon}
+                  alt=""
+                  className="chain-dropdown__icon"
+                  width={20}
+                  height={20}
+                />
+              ) : (
+                <span className="chain-dropdown__icon-text">
+                  {selectedChain.chainType === "evm" ? "⬡" : "◎"}
+                </span>
+              )}
+              <span className="chain-dropdown__name">{selectedChain.name}</span>
+            </>
+          ) : (
+            <>
+              <span className="chain-dropdown__icon-text">🌐</span>
+              <span className="chain-dropdown__name">All Chains</span>
+            </>
+          )}
+          <svg
+            className={`chain-dropdown__arrow ${isOpen ? "chain-dropdown__arrow--open" : ""}`}
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+          >
+            <path
+              d="M3 4.5L6 7.5L9 4.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+
+        {isOpen && (
+          <>
+            <div className="chain-dropdown__backdrop" onClick={() => setIsOpen(false)} />
+            <div className="chain-dropdown__menu">
+              {showAllOption && (
+                <button
+                  className={`chain-dropdown__item ${selectedChainId === null ? "chain-dropdown__item--active" : ""}`}
+                  onClick={() => {
+                    onSelectChain(null);
+                    setIsOpen(false);
+                  }}
+                >
+                  <span className="chain-dropdown__item-icon">🌐</span>
+                  <span className="chain-dropdown__item-name">All Chains</span>
+                </button>
+              )}
+              {chains.map((chain) => {
+                const meta = getChainMeta(chain.chainId);
+                const isActive = selectedChainId === chain.chainId;
+
+                return (
+                  <button
+                    key={chain.chainId}
+                    className={`chain-dropdown__item ${isActive ? "chain-dropdown__item--active" : ""}`}
+                    onClick={() => {
+                      onSelectChain(chain.chainId);
+                      setIsOpen(false);
+                    }}
+                    style={{
+                      "--chain-color": meta.color,
+                    } as React.CSSProperties}
+                  >
+                    {meta.icon ? (
+                      <img
+                        src={meta.icon}
+                        alt=""
+                        className="chain-dropdown__item-icon"
+                        width={20}
+                        height={20}
+                      />
+                    ) : (
+                      <span className="chain-dropdown__item-icon">
+                        {chain.chainType === "evm" ? "⬡" : "◎"}
+                      </span>
+                    )}
+                    <span className="chain-dropdown__item-name">{chain.name}</span>
+                    <span className="chain-dropdown__item-type">{chain.chainType.toUpperCase()}</span>
+                    {isActive && (
+                      <svg
+                        className="chain-dropdown__item-check"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                      >
+                        <path
+                          d="M13.3333 4L6 11.3333L2.66667 8"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
     );
   }

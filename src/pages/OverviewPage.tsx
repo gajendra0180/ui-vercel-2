@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAllServers, ServerEntry, getRecentTransactions, TransactionEntry } from "../utils/api";
+import { getAllServers, getServersByChain, ServerEntry, getRecentTransactions, TransactionEntry } from "../utils/api";
 import { Spinner } from "../components/Spinner";
 import { EmptyState } from "../components/EmptyState";
+import { useChainContext } from "../contexts/ChainContext";
 import "./OverviewPage.css";
 
 interface LeaderboardEntry {
@@ -41,6 +42,7 @@ const formatRelativeTime = (timestamp: string | null) => {
 
 export function OverviewPage() {
   const navigate = useNavigate();
+  const { selectedChainId } = useChainContext();
   const [servers, setServers] = useState<ServerEntry[]>([]);
   const [transactions, setTransactions] = useState<TransactionEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,13 +50,18 @@ export function OverviewPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedChainId]);
 
   const loadData = async () => {
     try {
       setLoading(true);
+      // Use chain-filtered endpoint if a chain is selected
+      const allServersPromise = selectedChainId
+        ? getServersByChain(selectedChainId)
+        : getAllServers();
+
       const [allServers, recentTxs] = await Promise.all([
-        getAllServers(),
+        allServersPromise,
         getRecentTransactions(15), // Fetch last 15 transactions
       ]);
       setServers(allServers);

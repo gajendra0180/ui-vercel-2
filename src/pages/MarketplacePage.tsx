@@ -8,6 +8,7 @@ import { SkeletonCard } from "../components/Skeleton";
 import { ChainSelector, ChainBadge } from "../components/ChainSelector";
 import { useDebounce } from "../hooks/useDebounce";
 import { useFavorites } from "../hooks/useFavorites";
+import { useChainContext } from "../contexts/ChainContext";
 import "./MarketplacePage.css";
 
 type SortOption = "trending" | "newest" | "price-low" | "price-high";
@@ -121,23 +122,20 @@ export function MarketplacePage() {
   );
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [selectedChainId, setSelectedChainId] = useState<string | null>(
-    searchParams.get("chain") || null
-  );
   const { favorites, isFavorite, toggleFavorite } = useFavorites(account?.address);
+
+  // Use global chain context from navbar
+  const { selectedChainId } = useChainContext();
 
   useEffect(() => {
     loadServers();
   }, [selectedChainId]);
 
+  // Reset filters when chain changes
   useEffect(() => {
-    // Update URL when chain filter changes
-    if (selectedChainId) {
-      searchParams.set("chain", selectedChainId);
-    } else {
-      searchParams.delete("chain");
-    }
-    setSearchParams(searchParams, { replace: true });
+    setSelectedCategory("all");
+    setPriceFilter("all");
+    setSearchQuery("");
   }, [selectedChainId]);
 
   useEffect(() => {
@@ -322,15 +320,6 @@ export function MarketplacePage() {
             <p id="search-help" className="sr-only">
               Type to search for API servers. Results update as you type.
             </p>
-          </div>
-          {/* Chain Filter */}
-          <div className="chain-filter-hero">
-            <ChainSelector
-              selectedChainId={selectedChainId}
-              onSelectChain={setSelectedChainId}
-              variant="pills"
-              showAllOption={true}
-            />
           </div>
         </div>
       </section>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAllServers, ServerEntry } from "../utils/api";
+import { getAllServers, getServersByChain, ServerEntry } from "../utils/api";
+import { useChainContext } from "../contexts/ChainContext";
 import { APICard } from "../components/APICard";
 import "./DiscoverPage.css";
 
@@ -107,6 +108,7 @@ const formatCurrencyDisplay = (value: number) =>
 
 export function DiscoverPage() {
   const navigate = useNavigate();
+  const { selectedChainId } = useChainContext();
   const [servers, setServers] = useState<ServerEntry[]>([]);
   const [filteredServers, setFilteredServers] = useState<ServerEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,7 +120,7 @@ export function DiscoverPage() {
 
   useEffect(() => {
     loadServers();
-  }, []);
+  }, [selectedChainId]);
 
   useEffect(() => {
     filterAndSortServers();
@@ -178,7 +180,9 @@ export function DiscoverPage() {
   const loadServers = async () => {
     try {
       setLoading(true);
-      const allServers = await getAllServers();
+      const allServers = selectedChainId
+        ? await getServersByChain(selectedChainId)
+        : await getAllServers();
       setServers(allServers);
     } catch (error) {
       console.error("Failed to load servers:", error);

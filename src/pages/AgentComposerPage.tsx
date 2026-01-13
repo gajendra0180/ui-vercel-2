@@ -12,6 +12,7 @@ import { Spinner } from "../components/Spinner";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import ToolPills, { ToolInfo } from "../components/ToolPills";
 import ToolPickerModal from "../components/ToolPickerModal";
+import { useChainContext } from "../contexts/ChainContext";
 import "./AgentComposerPage.css";
 
 /**
@@ -24,6 +25,7 @@ function isValidLLMProvider(value: unknown): value is "claude" | "gpt" | "gemini
 export function AgentComposerPage() {
   const navigate = useNavigate();
   const account = useActiveAccount();
+  const { selectedChainId } = useChainContext();
 
   // Form state
   const [agentName, setAgentName] = useState("");
@@ -52,12 +54,12 @@ export function AgentComposerPage() {
   // Load available servers and tools
   useEffect(() => {
     loadServersAndTools();
-  }, []);
+  }, [selectedChainId]);
 
   const loadServersAndTools = async () => {
     try {
       setLoading(true);
-      const serversData = await getAvailableServersForTools();
+      const serversData = await getAvailableServersForTools(selectedChainId);
       setServers(serversData);
       const tools = getAllAvailableTools(serversData);
       setAllTools(tools);

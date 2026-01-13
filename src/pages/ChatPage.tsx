@@ -5,6 +5,7 @@ import {
   getAllAgents,
   getAgent,
   getAllServers,
+  getServersByChain,
   createChatSession,
   getUserChatSessions,
   sendChatMessage,
@@ -18,6 +19,7 @@ import {
   ServerEntry,
 } from "../utils/api";
 import { useX402Payment } from "../hooks/useX402Payment";
+import { useChainContext } from "../contexts/ChainContext";
 import { Spinner } from "../components/Spinner";
 import ChatMessage from "../components/ChatMessage";
 import ChatSidebar from "../components/ChatSidebar";
@@ -48,6 +50,7 @@ export function ChatPage() {
   const account = useActiveAccount();
   const [searchParams] = useSearchParams();
   const { callAPIWithPayment, isProcessing } = useX402Payment();
+  const { selectedChainId, setSelectedChain } = useChainContext();
 
   // Agent selection state
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -73,32 +76,78 @@ export function ChatPage() {
 
   // UI state
   const [error, setError] = useState<string | null>(null);
+  const [chainMismatch, setChainMismatch] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
   const [toolCalls, setToolCalls] = useState<ToolCallEntry[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
 
-  // Load agents and servers on mount
+  // Load agents and servers on mount and when chain changes
   useEffect(() => {
     loadAgents();
     loadServers();
-  }, []);
+  }, [selectedChainId]);
 
-  // Auto-select agent from URL parameter if present
+  // Auto-select agent from URL parameter if present and auto-switch chain
   useEffect(() => {
-    const agentIdFromUrl = searchParams.get("agentId");
-    if (agentIdFromUrl && agents.length > 0 && !selectedAgent) {
-      const agent = agents.find((a) => a.id === agentIdFromUrl);
-      if (agent) {
-        startChatWithAgent(agent);
+    const autoSelectAgent = async () => {
+      const agentIdFromUrl = searchParams.get("agentId");
+      if (agentIdFromUrl && agents.length > 0 && !selectedAgent) {
+        const agent = agents.find((a) => a.id === agentIdFromUrl);
+        if (agent) {
+          // Auto-switch chain if agent belongs to different chain
+          if (agent.availableTools && agent.availableTools.length > 0) {
+            const allServersData = await getAllServers();
+            const [serverSlug] = agent.availableTools[0].split('/');
+            const server = allServersData.find(s => s.slug === serverSlug);
+
+            if (server && server.chainId && server.chainId !== selectedChainId) {
+              console.log(`Auto-switching chain from ${selectedChainId} to ${server.chainId} for agent ${agent.name}`);
+              setSelectedChain(server.chainId);
+            }
+          }
+          startChatWithAgent(agent);
+        }
       }
-    }
+    };
+
+    autoSelectAgent();
   }, [agents, searchParams, selectedAgent]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Check if selected agent belongs to currently selected chain
+  useEffect(() => {
+    if (!selectedAgent || !servers.length) {
+      setChainMismatch(false);
+      return;
+    }
+
+    const agentBelongsToCurrentChain = () => {
+      if (!selectedChainId || !selectedAgent.availableTools || selectedAgent.availableTools.length === 0) {
+        return false;
+      }
+
+      // Check if all agent's tools belong to servers on the selected chain
+      return selectedAgent.availableTools.every((toolId) => {
+        const [serverSlug] = toolId.split('/');
+        const server = servers.find(s => s.slug === serverSlug);
+        return server && server.chainId === selectedChainId;
+      });
+    };
+
+    const belongsToChain = agentBelongsToCurrentChain();
+    setChainMismatch(!belongsToChain);
+
+    if (!belongsToChain && selectedAgent) {
+      setError(`⚠️ Chain mismatch: This agent's APIs are not available on the currently selected blockchain.`);
+    } else if (error?.includes('Chain mismatch')) {
+      setError(null);
+    }
+  }, [selectedChainId, selectedAgent, servers]);
 
   const loadAgents = async () => {
     try {
@@ -115,7 +164,9 @@ export function ChatPage() {
 
   const loadServers = async () => {
     try {
-      const serversData = await getAllServers();
+      const serversData = selectedChainId
+        ? await getServersByChain(selectedChainId)
+        : await getAllServers();
       setServers(serversData);
     } catch (err) {
       console.error("Failed to load servers:", err);
@@ -296,7 +347,7 @@ export function ChatPage() {
   };
 
   const handleSendMessage = useCallback(async () => {
-    if (!messageInput.trim() || !session || streaming || !selectedAgent) {
+    if (!messageInput.trim() || !session || streaming || !selectedAgent || chainMismatch) {
       return;
     }
 
@@ -454,7 +505,7 @@ export function ChatPage() {
       setError(err.message || "Failed to send message");
       setStreaming(false);
     }
-  }, [messageInput, session, streaming, selectedTools, selectedModel]);
+  }, [messageInput, session, streaming, selectedTools, selectedModel, chainMismatch, selectedAgent]);
 
   const handleKeyPress = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -721,20 +772,24 @@ export function ChatPage() {
               value={messageInput}
               onChange={(e) => setMessageInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
-              disabled={streaming}
+              placeholder={
+                chainMismatch
+                  ? "Switch to the correct chain to chat with this agent"
+                  : "Type your message... (Enter to send, Shift+Enter for new line)"
+              }
+              disabled={streaming || chainMismatch}
               rows={1}
             />
             <div className="chat-input-actions">
               <ModelSelector
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
-                disabled={streaming}
+                disabled={streaming || chainMismatch}
               />
               <button
                 className="chat-send-btn"
                 onClick={handleSendMessage}
-                disabled={streaming || !messageInput.trim()}
+                disabled={streaming || !messageInput.trim() || chainMismatch}
               >
                 {streaming ? "Sending..." : "Send"}
               </button>
