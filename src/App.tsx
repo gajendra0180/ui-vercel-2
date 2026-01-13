@@ -1,10 +1,13 @@
 import { ThirdwebProvider, ConnectButton } from "thirdweb/react";
 import { baseSepolia } from "thirdweb/chains";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useState, useEffect } from "react";
 import { Spinner } from "./components/Spinner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastProvider } from "./contexts/ToastContext";
+import { ChainProvider, useChainContext } from "./contexts/ChainContext";
+import { ChainSelector } from "./components/ChainSelector";
+import { useX402Payment } from "./hooks/useX402Payment";
 import "./App.css";
 import { thirdwebClient, THIRDWEB_CLIENT_ID } from "./lib/thirdwebClient";
 
@@ -41,12 +44,67 @@ function LoadingFallback() {
 function Navigation() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { selectedChainId, setSelectedChain, getChainConfig } = useChainContext();
+  const { connectSolanaWallet, getSolanaAddress, isSolanaWalletAvailable } = useX402Payment();
+  const [solanaAddress, setSolanaAddress] = useState<string | null>(null);
+  const [isConnectingSolana, setIsConnectingSolana] = useState(false);
+
+  // Get current chain type
+  const currentChainConfig = selectedChainId ? getChainConfig(selectedChainId) : null;
+  const isSolanaChain = currentChainConfig?.chainType === 'solana';
 
   const isActive = (path: string) => location.pathname === path;
 
   // Close mobile menu when route changes
   const handleNavClick = () => {
     setMobileMenuOpen(false);
+  };
+
+  // Update Solana address when chain changes or wallet connects
+  useEffect(() => {
+    if (isSolanaChain) {
+      const address = getSolanaAddress();
+      setSolanaAddress(address);
+
+      // Listen for Solana wallet connection changes
+      const solana = (window as any).solana || (window as any).phantom?.solana;
+      if (solana) {
+        const handleConnect = () => {
+          const addr = getSolanaAddress();
+          setSolanaAddress(addr);
+        };
+        const handleDisconnect = () => {
+          setSolanaAddress(null);
+        };
+
+        solana.on?.("connect", handleConnect);
+        solana.on?.("disconnect", handleDisconnect);
+
+        return () => {
+          solana.off?.("connect", handleConnect);
+          solana.off?.("disconnect", handleDisconnect);
+        };
+      }
+    }
+  }, [isSolanaChain, getSolanaAddress]);
+
+  // Handle Solana wallet connection
+  const handleConnectSolana = async () => {
+    setIsConnectingSolana(true);
+    try {
+      const address = await connectSolanaWallet();
+      setSolanaAddress(address);
+    } catch (error: any) {
+      console.error("Failed to connect Solana wallet:", error);
+      alert(error.message || "Failed to connect Solana wallet");
+    } finally {
+      setIsConnectingSolana(false);
+    }
+  };
+
+  // Format Solana address for display
+  const formatSolanaAddress = (address: string) => {
+    return `${address.slice(0, 4)}...${address.slice(-4)}`;
   };
 
   return (
@@ -84,9 +142,50 @@ function Navigation() {
         <Link to="/dashboard" className={isActive("/dashboard") ? "active" : ""} onClick={handleNavClick}>
           Dashboard
         </Link>
+
+        {/* Chain selector for mobile - pills variant */}
+        <div className="nav-chain-selector-mobile">
+          <ChainSelector
+            selectedChainId={selectedChainId}
+            onSelectChain={setSelectedChain}
+            variant="pills"
+            showAllOption={false}
+          />
+        </div>
       </div>
+
+      {/* Chain selector for desktop - dropdown variant */}
+      <div className="nav-chain-selector">
+        <ChainSelector
+          selectedChainId={selectedChainId}
+          onSelectChain={setSelectedChain}
+          variant="dropdown"
+          showAllOption={false}
+        />
+      </div>
+
+      {/* Wallet connection - conditional based on chain type */}
       <div className="nav-wallet">
-        <ConnectButton client={thirdwebClient} chain={baseSepolia} />
+        {isSolanaChain ? (
+          // Solana wallet button
+          solanaAddress ? (
+            <div className="solana-wallet-display">
+              <span className="wallet-label">Phantom</span>
+              <span className="wallet-address">{formatSolanaAddress(solanaAddress)}</span>
+            </div>
+          ) : (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleConnectSolana}
+              disabled={isConnectingSolana || !isSolanaWalletAvailable()}
+            >
+              {isConnectingSolana ? "Connecting..." : "Connect Phantom"}
+            </button>
+          )
+        ) : (
+          // EVM wallet button (thirdweb)
+          <ConnectButton client={thirdwebClient} chain={baseSepolia} />
+        )}
       </div>
     </nav>
   );
@@ -128,7 +227,9 @@ function App() {
       <ThirdwebProvider clientId={THIRDWEB_CLIENT_ID}>
         <BrowserRouter>
           <ToastProvider>
-            <AppContent />
+            <ChainProvider>
+              <AppContent />
+            </ChainProvider>
           </ToastProvider>
         </BrowserRouter>
       </ThirdwebProvider>
