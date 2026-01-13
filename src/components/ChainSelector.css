@@ -1,0 +1,171 @@
+/* ChainSelector Component Styles */
+
+.chain-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chain-selector--loading {
+  opacity: 0.6;
+}
+
+.chain-selector--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.chain-selector__loading {
+  font-size: 0.875rem;
+  color: var(--text-secondary, #888);
+}
+
+/* Pills variant */
+.chain-selector--pills {
+  flex-wrap: wrap;
+}
+
+.chain-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  background: var(--bg-secondary, #1a1a1a);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 9999px;
+  color: var(--text-primary, #fff);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chain-pill:hover {
+  background: var(--bg-hover, #222);
+  border-color: var(--chain-color, #666);
+}
+
+.chain-pill--active {
+  background: var(--chain-bg-color, rgba(102, 102, 102, 0.1));
+  border-color: var(--chain-color, #666);
+  color: var(--chain-color, #fff);
+}
+
+.chain-pill__icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.chain-pill__icon-img {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.chain-pill__name {
+  white-space: nowrap;
+}
+
+.chain-pill__type {
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.125rem 0.375rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Dropdown variant */
+.chain-selector--dropdown {
+  position: relative;
+}
+
+.chain-selector__select {
+  appearance: none;
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  background: var(--bg-secondary, #1a1a1a);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 0.5rem;
+  color: var(--text-primary, #fff);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+}
+
+.chain-selector__select:hover {
+  border-color: var(--text-secondary, #888);
+}
+
+.chain-selector__select:focus {
+  outline: none;
+  border-color: var(--primary-color, #0052FF);
+  box-shadow: 0 0 0 2px rgba(0, 82, 255, 0.2);
+}
+
+/* ChainBadge Component Styles */
+.chain-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  background: var(--chain-bg-color, rgba(102, 102, 102, 0.1));
+  border: 1px solid var(--chain-color, #666);
+  border-radius: 4px;
+  color: var(--chain-color, #888);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.chain-badge--small {
+  font-size: 0.625rem;
+  padding: 0.0625rem 0.25rem;
+}
+
+.chain-badge--medium {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+}
+
+.chain-badge__icon {
+  width: auto;
+  height: auto;
+  border-radius: 50%;
+}
+
+.chain-badge__icon-text {
+  font-size: inherit;
+  line-height: 1;
+}
+
+.chain-badge__name {
+  line-height: 1.2;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .chain-selector--pills {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.5rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .chain-selector--pills::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chain-pill {
+    flex-shrink: 0;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .chain-pill__type {
+    display: none;
+  }
+}
