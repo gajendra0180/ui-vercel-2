@@ -459,47 +459,9 @@
 }
 
 /* ===== Button Styles ===== */
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.95rem;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
+/* .btn, .btn-primary, .btn-secondary are now defined globally in App.css */
 
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 16px rgba(99, 102, 241, 0.3);
-}
-
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
+/* Page-specific button variant */
 .btn-icon {
   padding: 8px 10px;
   min-width: unset;
@@ -507,24 +469,7 @@
 }
 
 /* ===== Error and Success Boxes ===== */
-.error-box {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  padding: 14px;
-  color: #fca5a5;
-  font-size: 0.95rem;
-  margin-top: 20px;
-}
-
-.success-box {
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 8px;
-  padding: 14px;
-  color: #86efac;
-  font-size: 0.95rem;
-}
+/* .error-box and .success-box are now defined globally in App.css */
 
 /* ===== Loading State ===== */
 .loading-state {

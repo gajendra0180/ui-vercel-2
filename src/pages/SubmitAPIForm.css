@@ -64,39 +64,21 @@
 }
 
 .submit-header {
-  text-align: center;
-  margin-bottom: 36px;
-  color: white;
+  margin-bottom: 32px;
 }
 
-.submit-header h2 {
-  font-size: 1.8rem;
-  margin-bottom: 8px;
+.submit-header h1 {
+  font-size: 1.75rem;
   font-weight: 600;
-  color: white;
-}
-
-.submit-header p {
-  font-size: 1.15rem;
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.network-warning {
-  margin-top: 20px;
-  padding: 14px 20px;
-  background: rgba(245, 158, 11, 0.15);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 12px;
-  color: #fbbf24;
-  font-weight: 500;
-  font-size: 0.95rem;
+  margin: 0;
+  color: var(--text-primary, #f1f5f9);
 }
 
 /* ===== Form ===== */
 .submit-form {
   background: var(--bg-card, #12121a);
-  padding: 40px;
-  border-radius: 24px;
+  padding: 32px;
+  border-radius: 16px;
   border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
 }
 
@@ -110,16 +92,9 @@
 
 .form-section h3 {
   color: var(--text-primary, #f1f5f9);
-  margin-bottom: 8px;
-  font-size: 1.35rem;
-  font-weight: 700;
-}
-
-.section-description {
-  color: var(--text-secondary, #94a3b8);
-  margin-bottom: 24px;
-  font-size: 0.95rem;
-  line-height: 1.5;
+  margin-bottom: 20px;
+  font-size: 1.125rem;
+  font-weight: 600;
 }
 
 .form-group {
@@ -128,10 +103,10 @@
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
+  margin-bottom: 6px;
+  font-weight: 500;
   color: var(--text-secondary, #94a3b8);
-  font-size: 0.9rem;
+  font-size: 0.875rem;  /* Increased from 0.8125rem (13px) to 14px for better readability */
 }
 
 .input {
@@ -177,7 +152,8 @@
   display: flex;
   align-items: center;
   cursor: pointer;
-  padding: 8px 16px;
+  padding: 12px 18px;  /* Increased padding for better touch targets */
+  min-height: 44px;  /* Accessibility: minimum 44px touch target */
   border-radius: 8px;
   border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
   background: var(--bg-elevated, #1e1e2a);
@@ -188,14 +164,16 @@
 .tag-checkbox:hover {
   border-color: var(--primary, #6366f1);
   background: var(--bg-card-hover, #1a1a24);
+  transform: translateY(-1px);
 }
 
 .tag-checkbox input[type="checkbox"] {
-  margin-right: 8px;
+  margin-right: 10px;
   cursor: pointer;
-  width: 18px;
-  height: 18px;
+  width: 20px;  /* Increased from 18px for better visibility */
+  height: 20px;
   accent-color: var(--primary, #6366f1);
+  flex-shrink: 0;
 }
 
 .tag-checkbox input[type="checkbox"]:checked + .tag-label {
@@ -216,11 +194,23 @@
 
 /* ===== API Entry Cards ===== */
 .api-entry {
-  background: var(--bg-card, #12121a);
-  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: var(--bg-elevated, #1e1e2a);  /* Slightly different bg for better separation */
+  border: 2px solid var(--border-color, rgba(255, 255, 255, 0.08));
   border-radius: 16px;
   padding: 24px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;  /* Increased from 20px for better spacing */
+  position: relative;
+}
+
+.api-entry:not(:last-of-type)::after {
+  content: '';
+  position: absolute;
+  bottom: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 8px;
+  background: linear-gradient(180deg, var(--primary, #6366f1) 0%, transparent 100%);
 }
 
 .api-entry-header {
@@ -228,59 +218,44 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .api-number {
   font-weight: 700;
   color: var(--primary, #6366f1);
-  font-size: 1.1rem;
+  font-size: 1.15rem;  /* Slightly larger for better hierarchy */
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.btn-danger {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--error, #ef4444);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+.api-number::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--primary, #6366f1);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+}
+
+/* .btn-danger is now defined globally in App.css */
+.api-entry-header .btn-danger {
   padding: 8px 14px;
-  border-radius: 8px;
-  cursor: pointer;
   font-size: 0.85rem;
-  font-weight: 600;
-  transition: all 0.2s;
-}
-
-.btn-danger:hover {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.5);
 }
 
 /* ===== Alerts ===== */
-.error-box {
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  color: var(--error, #ef4444);
-  padding: 16px 20px;
-  border-radius: 12px;
-  margin-bottom: 20px;
-  font-size: 0.95rem;
-}
-
-.success-box {
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  color: var(--success, #10b981);
-  padding: 16px 20px;
-  border-radius: 12px;
-  margin-bottom: 20px;
-  font-size: 0.95rem;
-}
-
-.success-box a {
+/* .error-box and .success-box are now defined globally in App.css */
+/* Page-specific alert link styling */
+.submit-form .success-box a {
   color: var(--primary, #6366f1);
   text-decoration: none;
   font-weight: 600;
 }
 
-.success-box a:hover {
+.submit-form .success-box a:hover {
   text-decoration: underline;
 }
 
@@ -513,6 +488,7 @@
   line-height: 1.5;
 }
 
+
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
   .submit-page {
@@ -520,11 +496,11 @@
   }
 
   .submit-header h1 {
-    font-size: 2rem;
+    font-size: 1.5rem;
   }
 
   .submit-form {
-    padding: 24px;
+    padding: 20px;
   }
 
   .api-entry {
@@ -555,5 +531,25 @@
 
   .chain-option {
     min-width: 100%;
+  }
+
+  .tag-selection {
+    grid-template-columns: repeat(2, 1fr);  /* 2 columns on mobile for better layout */
+    display: grid;
+  }
+
+  .tag-checkbox {
+    padding: 10px 14px;  /* Slightly reduced on mobile */
+  }
+
+  .tag-label {
+    font-size: 0.85rem;
+  }
+
+}
+
+@media (max-width: 480px) {
+  .tag-selection {
+    grid-template-columns: 1fr;  /* Single column on very small screens */
   }
 }

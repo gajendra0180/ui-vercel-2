@@ -259,49 +259,11 @@
   flex-wrap: wrap;
 }
 
-.btn-large {
-  padding: 12px 24px;
-  font-size: 1rem;
-  font-weight: 600;
+/* .btn, .btn-primary, .btn-secondary, .btn-large are now defined globally in App.css */
+
+/* Page-specific button sizing */
+.agent-actions .btn-large {
   min-width: 200px;
-}
-
-.btn {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(99, 102, 241, 0.3);
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-}
-
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
 }
 
 /* ===== Loading State ===== */
