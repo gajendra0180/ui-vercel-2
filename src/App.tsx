@@ -70,8 +70,7 @@ function Navigation() {
       const solana = (window as any).solana || (window as any).phantom?.solana;
       if (solana) {
         const handleConnect = () => {
-          const addr = getSolanaAddress();
-          setSolanaAddress(addr);
+          setSolanaAddress(solana.publicKey?.toString() || null);
         };
         const handleDisconnect = () => {
           setSolanaAddress(null);
@@ -85,8 +84,11 @@ function Navigation() {
           solana.off?.("disconnect", handleDisconnect);
         };
       }
+    } else {
+      // Clear Solana address when switching to EVM chain
+      setSolanaAddress(null);
     }
-  }, [isSolanaChain, getSolanaAddress]);
+  }, [isSolanaChain]);
 
   // Handle Solana wallet connection
   const handleConnectSolana = async () => {

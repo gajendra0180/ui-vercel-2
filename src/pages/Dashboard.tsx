@@ -52,10 +52,11 @@ export function Dashboard() {
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
   useEffect(() => {
-    if (account || getSolanaAddress()) {
+    const solanaAddr = getSolanaAddress();
+    if (account || solanaAddr) {
       loadMyServers();
     }
-  }, [account, selectedChainId, getSolanaAddress]);
+  }, [account, selectedChainId]);
 
   // Auto-generate slug from name (only if not manually edited)
   useEffect(() => {
