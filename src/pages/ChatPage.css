@@ -126,6 +126,44 @@
   margin: 0 0 24px;
 }
 
+.chat-identity__instructions {
+  margin: 0 0 24px;
+  text-align: left;
+  max-width: 500px;
+}
+
+.chat-identity__instructions details {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.chat-identity__instructions summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: #a5b4fc;
+  font-weight: 500;
+}
+
+.chat-identity__instructions summary:hover {
+  color: #c7d2fe;
+}
+
+.chat-identity__instructions pre {
+  margin: 12px 0 0;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  text-align: left;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
 .chat-identity__prompts {
   display: flex;
   flex-direction: column;

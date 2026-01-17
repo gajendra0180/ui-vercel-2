@@ -703,6 +703,14 @@ export function ChatPage() {
             <div className="chat-identity__icon">🤖</div>
             <h2 className="chat-identity__name">{selectedAgent.name}</h2>
             <p className="chat-identity__desc">{selectedAgent.description}</p>
+            {selectedAgent.systemInstructions && (
+              <div className="chat-identity__instructions">
+                <details>
+                  <summary>🎯 System Instructions</summary>
+                  <pre>{selectedAgent.systemInstructions}</pre>
+                </details>
+              </div>
+            )}
             {selectedAgent.starterPrompts && selectedAgent.starterPrompts.length > 0 && (
               <div className="chat-identity__prompts">
                 {selectedAgent.starterPrompts.map((prompt, idx) => (

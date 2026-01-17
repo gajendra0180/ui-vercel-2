@@ -59,6 +59,7 @@ export function useX402Payment() {
   const account = useActiveAccount();
   const wallet = useActiveWallet();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSigning, setIsSigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -342,18 +343,22 @@ export function useX402Payment() {
         let paymentProof: any;
 
         // Step 3: Sign payment based on chain type
-        if (effectiveChainType === "solana") {
-          console.log("Signing Solana payment authorization...");
-          paymentProof = await signSolanaPayment(payTo, amountValue, x402Version);
-        } else {
-          console.log("Signing EVM payment authorization...");
-          if (!account || !wallet) {
-            throw new Error("EVM wallet not connected");
+        setIsSigning(true);
+        try {
+          if (effectiveChainType === "solana") {
+            console.log("Signing Solana payment authorization...");
+            paymentProof = await signSolanaPayment(payTo, amountValue, x402Version);
+          } else {
+            console.log("Signing EVM payment authorization...");
+            if (!account || !wallet) {
+              throw new Error("EVM wallet not connected");
+            }
+            paymentProof = await signEVMPayment(payTo, paymentAsset, amountValue, x402Version);
           }
-          paymentProof = await signEVMPayment(payTo, paymentAsset, amountValue, x402Version);
+          console.log("Payment authorization signed successfully");
+        } finally {
+          setIsSigning(false);
         }
-
-        console.log("Payment authorization signed successfully");
 
         // Step 4: Wait for facilitator processing
         console.log("Waiting for facilitator to process payment...");
@@ -552,6 +557,7 @@ export function useX402Payment() {
     wallet,
     callAPIWithPayment,
     isProcessing,
+    isSigning,
     error,
     isReady: !!account || isSolanaWalletAvailable(),
     // Solana-specific helpers

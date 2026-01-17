@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useActiveAccount, useActiveWalletChain, useSendTransaction, ConnectButton } from "thirdweb/react";
-import { getContract, prepareContractCall, readContract } from "thirdweb";
+import { useActiveAccount, useActiveWalletChain, ConnectButton } from "thirdweb/react";
+import { getContract, readContract } from "thirdweb";
 import { baseSepolia } from "thirdweb/chains";
-import { parseUnits, parseEventLogs, createPublicClient, http } from "viem";
+import { parseUnits, parseEventLogs, createPublicClient, createWalletClient, http, custom, encodeFunctionData } from "viem";
 import { baseSepolia as baseSepoliaViem } from "viem/chains";
 import { TOKEN_FACTORY_ADDRESS, TOKEN_FACTORY_ABI } from "../contracts/tokenFactory";
 import { USDC_ADDRESS } from "../constants/addresses";
@@ -76,7 +76,7 @@ export function SubmitAPIForm() {
   const navigate = useNavigate();
   const account = useActiveAccount();
   const chain = useActiveWalletChain();
-  const { mutate: sendTransaction, isPending: isTransactionPending } = useSendTransaction();
+  const [isTransactionPending, setIsTransactionPending] = useState(false);
 
   // Solana wallet support
   const { isSolanaWalletAvailable, connectSolanaWallet, getSolanaAddress } = useX402Payment();
@@ -563,11 +563,44 @@ export function SubmitAPIForm() {
         return;
       }
 
-      // Prepare contract call
-      const transaction = prepareContractCall({
-        contract: tokenFactoryContract,
-        method: "createToken",
-        params: [
+      // Close confirmation dialog and set pending state
+      setShowRegisterConfirm(false);
+      setIsTransactionPending(true);
+
+      // Use viem directly to send transaction (bypasses Thirdweb popup)
+      console.log("✅ Preparing transaction with viem...");
+
+      // Get wallet from window (MetaMask or other injected wallet)
+      const ethereum = (window as any).ethereum;
+      if (!ethereum) {
+        throw new Error("No wallet found. Please install MetaMask or another Web3 wallet.");
+      }
+
+      // Create wallet client using the browser wallet
+      const walletClient = createWalletClient({
+        chain: baseSepoliaViem,
+        transport: custom(ethereum),
+      });
+
+      // Create public client for reading and waiting
+      const publicClient = createPublicClient({
+        chain: baseSepoliaViem,
+        transport: http(),
+      });
+
+      // Encode the createToken function call
+      const createTokenAbi = TOKEN_FACTORY_ABI.find(
+        (item: any) => item.type === "function" && item.name === "createToken"
+      );
+
+      if (!createTokenAbi) {
+        throw new Error("createToken ABI not found");
+      }
+
+      const data = encodeFunctionData({
+        abi: [createTokenAbi],
+        functionName: "createToken",
+        args: [
           {
             name: formData.name.trim(),
             symbol: formData.symbol.trim(),
@@ -578,191 +611,156 @@ export function SubmitAPIForm() {
         ],
       });
 
-      console.log("✅ Transaction prepared, sending...");
+      console.log("📤 Sending transaction via wallet...");
 
-      // Close confirmation dialog
-      setShowRegisterConfirm(false);
-
-      // Send transaction
-      sendTransaction(transaction, {
-        onSuccess: async (result) => {
-          setTxHash(result.transactionHash);
-          
-          try {
-            // Wait for transaction receipt to get the token address from the event
-            const publicClient = createPublicClient({
-              chain: baseSepoliaViem,
-              transport: http(),
-            });
-
-            // Poll for transaction receipt
-            let receipt = null;
-            let attempts = 0;
-            const maxAttempts = 30;
-            
-            while (!receipt && attempts < maxAttempts) {
-              try {
-                receipt = await publicClient.waitForTransactionReceipt({
-                  hash: result.transactionHash as `0x${string}`,
-                });
-                break;
-              } catch (error: unknown) {
-                if ((error as any)?.message?.includes("not found") || (error as any)?.message?.includes("not yet")) {
-                  await new Promise(resolve => setTimeout(resolve, 1000));
-                  attempts++;
-                } else {
-                  throw error;
-                }
-              }
-            }
-
-            if (!receipt) {
-              throw new Error("Transaction receipt not found after waiting");
-            }
-
-            // Debug: Log receipt details
-            console.log("📋 Receipt status:", receipt.status);
-            console.log("📋 Receipt logs count:", receipt.logs?.length || 0);
-            console.log("📋 Receipt hash:", receipt.transactionHash);
-
-            if (receipt.status === "reverted") {
-              console.error("❌ TRANSACTION REVERTED!");
-              throw new Error("Transaction reverted. Check the browser console for details.");
-            }
-
-            if (!receipt.logs || receipt.logs.length === 0) {
-              console.error("❌ NO LOGS IN RECEIPT - Transaction may have failed");
-              console.error("Receipt:", receipt);
-              throw new Error("No logs in transaction receipt - the transaction may have failed silently");
-            }
-
-            // Log all receipts logs for debugging
-            console.log("📝 Logs in receipt:");
-            receipt.logs.forEach((log, i) => {
-              console.log(`  Log ${i}:`, {
-                address: log.address,
-                topics: log.topics,
-                data: log.data,
-              });
-            });
-
-            // Parse TokenCreated event to get the token address
-            const tokenCreatedEvent = parseEventLogs({
-              abi: TOKEN_FACTORY_ABI,
-              eventName: "TokenCreated",
-              logs: receipt.logs,
-            });
-
-            if (!tokenCreatedEvent || tokenCreatedEvent.length === 0) {
-              console.error("❌ TokenCreated event not found!");
-              console.error("Expected TokenFactory address:", "0xe5331BBB34376bB0E2b15D7dAaBd0A1E33579E29");
-              console.error("Received logs from:", receipt.logs.map(l => l.address));
-              throw new Error("TokenCreated event not found in transaction receipt - check console for log details");
-            }
-
-            const tokenAddress = tokenCreatedEvent[0].args.token as string;
-
-            if (!tokenAddress) {
-              throw new Error("Token address not found in TokenCreated event");
-            }
-
-            console.log("✅ Token address retrieved:", tokenAddress);
-
-            setSuccess(true);
-
-            // Register the server with the backend API (with all APIs and slugs)
-            try {
-              const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-              
-              // Format APIs for backend with slugs and fees
-              const formattedApis = apis.map(api => ({
-                slug: api.slug.toLowerCase().trim(),
-                name: api.name.trim(),
-                apiUrl: api.apiUrl.trim(),
-                description: api.description.trim(),
-                fee: parseUnits(api.fee, 6).toString(), // Convert to smallest unit
-              }));
-              
-              // Build registration payload with slugs and chainId
-              const registerPayload = {
-                tokenAddress: tokenAddress.toLowerCase(),
-                serverSlug: formData.slug.toLowerCase().trim(),
-                name: formData.name.trim(),
-                symbol: formData.symbol.trim(),
-                chainId: selectedChainId,
-                tags: formData.tags.length > 0 ? formData.tags : undefined,
-                apis: formattedApis,
-                builder: account.address.toLowerCase(),
-                paymentToken: USDC_ADDRESS.toLowerCase(),
-              };
-              
-              console.log("📝 Registering server with backend:", registerPayload);
-              
-              const registerResponse = await fetch(`${baseUrl}/api/register`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify(registerPayload),
-              });
-
-              if (registerResponse.ok) {
-                const result = await registerResponse.json();
-                console.log(`✅ Server registered successfully with backend (${formattedApis.length} APIs)`, result);
-              } else {
-                let errorMessage = "Unknown error";
-                try {
-                  const errorJson = await registerResponse.json();
-                  errorMessage = errorJson.message || errorJson.error || JSON.stringify(errorJson);
-                  console.error("⚠️ Failed to register server with backend:", errorJson);
-                } catch {
-                  errorMessage = await registerResponse.text();
-                  console.error("⚠️ Failed to register server with backend:", errorMessage);
-                }
-                setError(`Transaction succeeded but registration failed: ${errorMessage}`);
-              }
-            } catch (registerError: unknown) {
-              console.error("⚠️ Error registering server with backend:", registerError);
-              setError(`Transaction succeeded but registration failed: ${registerError.message}`);
-            }
-
-            // Wait a bit then redirect to discover page
-            setTimeout(() => {
-              navigate("/");
-            }, 3000);
-          } catch (receiptError: unknown) {
-            console.error("Error waiting for transaction receipt:", receiptError);
-            setError(`Transaction sent but failed to get token address: ${receiptError.message}`);
-          }
-        },
-        onError: (err: unknown) => {
-          console.error("❌ Transaction error:", err);
-          console.error("Error details:", JSON.stringify(err, null, 2));
-          
-          let errorMessage = err.message || "Transaction failed";
-          
-          if (err.data || err.reason) {
-            const revertReason = err.data || err.reason;
-            errorMessage = `Transaction reverted: ${revertReason}`;
-          }
-          
-          if (err.message?.includes("execution reverted")) {
-            errorMessage = "Transaction reverted. Possible reasons:\n" +
-              "- Invalid API URL format\n" +
-              "- Name or symbol is empty or invalid\n" +
-              "- Subscription fee is too high\n" +
-              "- Token with same name/symbol already exists\n" +
-              "- Contract is paused\n" +
-              "\nCheck console for more details.";
-          }
-          
-          setError(errorMessage);
-        },
+      // Send transaction directly via wallet
+      const txHash = await walletClient.sendTransaction({
+        account: account.address as `0x${string}`,
+        to: TOKEN_FACTORY_ADDRESS as `0x${string}`,
+        data,
       });
+
+      console.log("✅ Transaction sent:", txHash);
+      setTxHash(txHash);
+
+      // Wait for transaction receipt
+      console.log("⏳ Waiting for confirmation...");
+      let receipt = null;
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      while (!receipt && attempts < maxAttempts) {
+        try {
+          receipt = await publicClient.waitForTransactionReceipt({
+            hash: txHash,
+          });
+          break;
+        } catch (error: unknown) {
+          if ((error as any)?.message?.includes("not found") || (error as any)?.message?.includes("not yet")) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            attempts++;
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      if (!receipt) {
+        throw new Error("Transaction receipt not found after waiting");
+      }
+
+      // Debug: Log receipt details
+      console.log("📋 Receipt status:", receipt.status);
+      console.log("📋 Receipt logs count:", receipt.logs?.length || 0);
+      console.log("📋 Receipt hash:", receipt.transactionHash);
+
+      if (receipt.status === "reverted") {
+        console.error("❌ TRANSACTION REVERTED!");
+        throw new Error("Transaction reverted. Check the browser console for details.");
+      }
+
+      if (!receipt.logs || receipt.logs.length === 0) {
+        console.error("❌ NO LOGS IN RECEIPT - Transaction may have failed");
+        console.error("Receipt:", receipt);
+        throw new Error("No logs in transaction receipt - the transaction may have failed silently");
+      }
+
+      // Log all receipts logs for debugging
+      console.log("📝 Logs in receipt:");
+      receipt.logs.forEach((log, i) => {
+        console.log(`  Log ${i}:`, {
+          address: log.address,
+          topics: log.topics,
+          data: log.data,
+        });
+      });
+
+      // Parse TokenCreated event to get the token address
+      const tokenCreatedEvent = parseEventLogs({
+        abi: TOKEN_FACTORY_ABI,
+        eventName: "TokenCreated",
+        logs: receipt.logs,
+      });
+
+      if (!tokenCreatedEvent || tokenCreatedEvent.length === 0) {
+        console.error("❌ TokenCreated event not found!");
+        console.error("Expected TokenFactory address:", TOKEN_FACTORY_ADDRESS);
+        console.error("Received logs from:", receipt.logs.map(l => l.address));
+        throw new Error("TokenCreated event not found in transaction receipt - check console for log details");
+      }
+
+      const tokenAddress = tokenCreatedEvent[0].args.token as string;
+
+      if (!tokenAddress) {
+        throw new Error("Token address not found in TokenCreated event");
+      }
+
+      console.log("✅ Token address retrieved:", tokenAddress);
+
+      setSuccess(true);
+
+      // Register the server with the backend API (with all APIs and slugs)
+      const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+
+      // Format APIs for backend with slugs and fees
+      const formattedApis = apis.map(api => ({
+        slug: api.slug.toLowerCase().trim(),
+        name: api.name.trim(),
+        apiUrl: api.apiUrl.trim(),
+        description: api.description.trim(),
+        fee: parseUnits(api.fee, 6).toString(), // Convert to smallest unit
+      }));
+
+      // Build registration payload with slugs and chainId
+      const registerPayload = {
+        tokenAddress: tokenAddress.toLowerCase(),
+        serverSlug: formData.slug.toLowerCase().trim(),
+        name: formData.name.trim(),
+        symbol: formData.symbol.trim(),
+        chainId: selectedChainId,
+        tags: formData.tags.length > 0 ? formData.tags : undefined,
+        apis: formattedApis,
+        builder: account.address.toLowerCase(),
+        paymentToken: USDC_ADDRESS.toLowerCase(),
+      };
+
+      console.log("📝 Registering server with backend:", registerPayload);
+
+      const registerResponse = await fetch(`${baseUrl}/api/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(registerPayload),
+      });
+
+      if (registerResponse.ok) {
+        const result = await registerResponse.json();
+        console.log(`✅ Server registered successfully with backend (${formattedApis.length} APIs)`, result);
+      } else {
+        let errorMessage = "Unknown error";
+        try {
+          const errorJson = await registerResponse.json();
+          errorMessage = errorJson.message || errorJson.error || JSON.stringify(errorJson);
+          console.error("⚠️ Failed to register server with backend:", errorJson);
+        } catch {
+          errorMessage = await registerResponse.text();
+          console.error("⚠️ Failed to register server with backend:", errorMessage);
+        }
+        setError(`Transaction succeeded but registration failed: ${errorMessage}`);
+      }
+
+      // Wait a bit then redirect to discover page
+      setTimeout(() => {
+        navigate("/");
+      }, 3000);
+
     } catch (err: unknown) {
+      console.error("❌ Error:", err);
       const message = err instanceof Error ? err.message : "Failed to submit API";
       setError(message);
-      console.error("Submit error:", err);
+    } finally {
+      setIsTransactionPending(false);
     }
   };
 

@@ -18,6 +18,7 @@ export function APIDetailsPage() {
   const {
     callAPIWithPayment,
     isProcessing,
+    isSigning,
     isReady,
     account,
     isSolanaWalletAvailable,
@@ -745,7 +746,7 @@ print(data)`}
                   (isSolanaServer ? !solanaAddress : !isReady)
                 }
               >
-                {testing || isProcessing ? "Signing Transaction..." : `💳 Pay & Test: ${selectedApi?.name || 'Select API'}`}
+                {isSigning ? "🔐 Signing Payment..." : (isProcessing || testing) ? "⏳ Processing Request..." : `💳 Pay & Test: ${selectedApi?.name || 'Select API'}`}
               </button>
             </div>
 

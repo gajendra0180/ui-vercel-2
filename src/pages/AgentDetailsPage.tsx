@@ -163,6 +163,16 @@ export function AgentDetailsPage() {
           <p className="agent-description">{agent.description}</p>
         </div>
 
+        {/* System Instructions */}
+        {agent.systemInstructions && (
+          <div className="info-card">
+            <h3>🎯 System Instructions</h3>
+            <p className="agent-instructions" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.9rem', backgroundColor: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px' }}>
+              {agent.systemInstructions}
+            </p>
+          </div>
+        )}
+
         {/* Agent Information */}
         <div className="info-card">
           <h3>ℹ️ Agent Information</h3>
