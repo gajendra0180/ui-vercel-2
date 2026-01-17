@@ -30,6 +30,7 @@ export function AgentComposerPage() {
   // Form state
   const [agentName, setAgentName] = useState("");
   const [agentDescription, setAgentDescription] = useState("");
+  const [systemInstructions, setSystemInstructions] = useState("");
   const [llmProvider, setLlmProvider] = useState<"claude" | "gpt" | "gemini">("claude");
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [starterPrompts, setStarterPrompts] = useState<string[]>([""]);
@@ -160,6 +161,7 @@ export function AgentComposerPage() {
       const result = await createAgent({
         name: agentName.trim(),
         description: agentDescription.trim(),
+        systemInstructions: systemInstructions.trim() || undefined,
         creator: account.address,
         llmProvider,
         availableTools: selectedTools,
@@ -173,6 +175,7 @@ export function AgentComposerPage() {
         // Reset form
         setAgentName("");
         setAgentDescription("");
+        setSystemInstructions("");
         setSelectedTools([]);
         setStarterPrompts([""]);
         setLlmProvider("claude");
@@ -285,6 +288,24 @@ export function AgentComposerPage() {
                   maxLength={500}
                 />
                 <small>{agentDescription.length}/500 characters</small>
+              </div>
+
+              <div className="form-group">
+                <label>
+                  System Instructions
+                  <span className="optional-badge">Optional</span>
+                </label>
+                <textarea
+                  value={systemInstructions}
+                  onChange={(e) => setSystemInstructions(e.target.value)}
+                  placeholder="Add custom instructions for how your agent should behave. For example:&#10;&#10;• Request format: Always format API requests as JSON with specific fields&#10;• Response handling: Parse and summarize results in a specific way&#10;• Constraints: Only suggest certain types of queries&#10;• Behavior: Always explain what data the API will return before calling it"
+                  rows={5}
+                  className="input textarea"
+                  maxLength={2000}
+                />
+                <small className="helper-text">
+                  {systemInstructions.length}/2000 characters • Use this to guide how your agent interacts with the selected APIs
+                </small>
               </div>
 
               <div className="form-group">
