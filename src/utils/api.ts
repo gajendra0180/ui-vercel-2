@@ -127,6 +127,7 @@ export interface Agent {
   id: string;
   name: string;
   description: string;
+  systemInstructions?: string; // Custom system instructions for the agent
   creator: string;
   llmProvider: "claude" | "gpt" | "gemini";
   availableTools: string[];
@@ -192,6 +193,88 @@ export interface ChatMessageResult {
   success: boolean;
   message?: ChatMessage;
   error?: string;
+}
+
+/**
+ * Server list filtering and pagination parameters
+ */
+export interface ServerListParams {
+  chainId?: string;
+  search?: string;
+  category?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sortBy?: 'trending' | 'newest' | 'price-low' | 'price-high';
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Server list response with pagination info
+ */
+export interface ServerListResponse {
+  servers: ServerEntry[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    count: number;
+    hasMore: boolean;
+  };
+}
+
+/**
+ * Get servers with filtering and pagination
+ * This is the primary function for fetching servers with server-side filtering
+ */
+export async function getServersWithFilters(params: ServerListParams = {}): Promise<ServerListResponse> {
+  try {
+    const baseUrl = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    const queryParams = new URLSearchParams();
+
+    if (params.chainId) queryParams.set('chainId', params.chainId);
+    if (params.search) queryParams.set('search', params.search);
+    if (params.category) queryParams.set('category', params.category);
+    if (params.minPrice !== undefined) queryParams.set('minPrice', params.minPrice.toString());
+    if (params.maxPrice !== undefined) queryParams.set('maxPrice', params.maxPrice.toString());
+    if (params.sortBy) queryParams.set('sortBy', params.sortBy);
+    if (params.limit !== undefined) queryParams.set('limit', params.limit.toString());
+    if (params.offset !== undefined) queryParams.set('offset', params.offset.toString());
+
+    const queryString = queryParams.toString();
+    const url = queryString ? `${baseUrl}/api/servers?${queryString}` : `${baseUrl}/api/servers`;
+
+    const response = await fetchWithTimeout(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch servers: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.success && Array.isArray(data.servers)) {
+      return {
+        servers: data.servers,
+        pagination: data.pagination || {
+          total: data.servers.length,
+          limit: params.limit || 20,
+          offset: params.offset || 0,
+          count: data.servers.length,
+          hasMore: false,
+        },
+      };
+    }
+
+    return {
+      servers: [],
+      pagination: { total: 0, limit: params.limit || 20, offset: params.offset || 0, count: 0, hasMore: false },
+    };
+  } catch (error) {
+    console.error("Error fetching servers with filters:", error);
+    return {
+      servers: [],
+      pagination: { total: 0, limit: params.limit || 20, offset: params.offset || 0, count: 0, hasMore: false },
+    };
+  }
 }
 
 /**
@@ -619,6 +702,7 @@ export async function getRecentTransactions(limit: number = 20): Promise<Transac
 export async function createAgent(data: {
   name: string;
   description: string;
+  systemInstructions?: string; // Custom system instructions for the agent
   creator: string;
   llmProvider: 'claude' | 'gpt' | 'gemini';
   availableTools: string[];

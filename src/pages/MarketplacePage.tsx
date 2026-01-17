@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useActiveAccount } from "thirdweb/react";
-import { getAllServers, getServersByChain, ServerEntry } from "../utils/api";
+import { getServersWithFilters, ServerEntry, ServerListParams, ServerListResponse } from "../utils/api";
+import { Pagination } from "../components/Pagination";
 import { APICard } from "../components/APICard";
 import { Spinner } from "../components/Spinner";
 import { SkeletonCard } from "../components/Skeleton";
@@ -106,6 +107,9 @@ const formatUSDC = (fee: string) => {
   }
 };
 
+// Constants for pagination
+const PAGE_SIZE = 20;
+
 export function MarketplacePage() {
   const navigate = useNavigate();
   const account = useActiveAccount();
@@ -124,18 +128,71 @@ export function MarketplacePage() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const { favorites, isFavorite, toggleFavorite } = useFavorites(account?.address);
 
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    total: 0,
+    limit: PAGE_SIZE,
+    offset: 0,
+    count: 0,
+    hasMore: false,
+  });
+  const [currentPage, setCurrentPage] = useState(0);
+
   // Use global chain context from navbar
   const { selectedChainId } = useChainContext();
 
+  // Load servers with server-side filtering
+  const loadServers = useCallback(async (offset: number = 0) => {
+    try {
+      setLoading(true);
+
+      // Build filter params for server-side filtering
+      const params: ServerListParams = {
+        limit: PAGE_SIZE,
+        offset,
+        sortBy: sortBy,
+      };
+
+      if (selectedChainId) {
+        params.chainId = selectedChainId;
+      }
+
+      if (debouncedSearchQuery) {
+        params.search = debouncedSearchQuery;
+      }
+
+      if (selectedCategory !== "all") {
+        params.category = selectedCategory;
+      }
+
+      if (priceFilter !== "all") {
+        const tier = PRICE_TIER_META[priceFilter];
+        params.minPrice = tier.min;
+        params.maxPrice = tier.max === Number.POSITIVE_INFINITY ? undefined : tier.max;
+      }
+
+      const response = await getServersWithFilters(params);
+      setServers(response.servers);
+      setPagination(response.pagination);
+    } catch (error) {
+      console.error("Failed to load servers:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedChainId, debouncedSearchQuery, selectedCategory, priceFilter, sortBy]);
+
+  // Load servers when filters change
   useEffect(() => {
-    loadServers();
-  }, [selectedChainId]);
+    setCurrentPage(0);
+    loadServers(0);
+  }, [selectedChainId, debouncedSearchQuery, selectedCategory, priceFilter, sortBy]);
 
   // Reset filters when chain changes
   useEffect(() => {
     setSelectedCategory("all");
     setPriceFilter("all");
     setSearchQuery("");
+    setCurrentPage(0);
   }, [selectedChainId]);
 
   useEffect(() => {
@@ -148,19 +205,12 @@ export function MarketplacePage() {
     setSearchParams(searchParams, { replace: true });
   }, [selectedCategory]);
 
-  const loadServers = async () => {
-    try {
-      setLoading(true);
-      // Use chain-filtered endpoint if a chain is selected
-      const allServers = selectedChainId
-        ? await getServersByChain(selectedChainId)
-        : await getAllServers();
-      setServers(allServers);
-    } catch (error) {
-      console.error("Failed to load servers:", error);
-    } finally {
-      setLoading(false);
-    }
+  // Handle page change
+  const handlePageChange = (newOffset: number) => {
+    setCurrentPage(newOffset);
+    loadServers(newOffset);
+    // Scroll to top of results
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Group servers by category (memoized)
@@ -175,93 +225,20 @@ export function MarketplacePage() {
   }, [servers]);
 
   /**
-   * Memoize expensive filter and sort operations
-   * Impact: Prevents recalculation on unrelated state changes
-   * Only recalculates when actual filters/sort/servers change
-   * Uses debounced search query to avoid excessive filtering
+   * Apply client-side favorites filter only
+   * Server-side handles search, category, price, and sort
+   * Favorites must be filtered client-side since it uses local data
    */
   const filteredAndSortedServers = useMemo(() => {
     let filtered = [...servers];
 
-    // Filter by search query (case-insensitive)
-    if (debouncedSearchQuery) {
-      const query = debouncedSearchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (server) =>
-          server.name.toLowerCase().includes(query) ||
-          server.symbol.toLowerCase().includes(query) ||
-          server.slug?.toLowerCase().includes(query) ||
-          (server.tags || []).some((tag) => tag.toLowerCase().includes(query))
-      );
-    }
-
-    // Filter by category
-    if (selectedCategory !== "all") {
-      filtered = filtered.filter((server) => {
-        return (server.tags || []).includes(selectedCategory);
-      });
-    }
-
-    // Filter by price tier
-    if (priceFilter !== "all") {
-      const tier = PRICE_TIER_META[priceFilter];
-      filtered = filtered.filter((server) => {
-        if (!server.apis || server.apis.length === 0) return false;
-        return server.apis.some((api) => {
-          const price = formatUSDC(api.fee);
-          return price >= tier.min && price <= tier.max;
-        });
-      });
-    }
-
-    // Filter by favorites
+    // Filter by favorites (client-side only - uses local storage data)
     if (showFavoritesOnly) {
       filtered = filtered.filter((server) => isFavorite(server.id));
     }
 
-    // Sort by selected option
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "trending": {
-          const aCount = parseInt(a.subscriptionCount || "0");
-          const bCount = parseInt(b.subscriptionCount || "0");
-          return bCount - aCount;
-        }
-        case "newest": {
-          if (a.createdAt && b.createdAt) {
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-          }
-          return b.id.localeCompare(a.id);
-        }
-        case "price-low": {
-          const aMinPrice =
-            a.apis && a.apis.length > 0
-              ? Math.min(...a.apis.map((api) => formatUSDC(api.fee)))
-              : 0;
-          const bMinPrice =
-            b.apis && b.apis.length > 0
-              ? Math.min(...b.apis.map((api) => formatUSDC(api.fee)))
-              : 0;
-          return aMinPrice - bMinPrice;
-        }
-        case "price-high": {
-          const aMaxPrice =
-            a.apis && a.apis.length > 0
-              ? Math.max(...a.apis.map((api) => formatUSDC(api.fee)))
-              : 0;
-          const bMaxPrice =
-            b.apis && b.apis.length > 0
-              ? Math.max(...b.apis.map((api) => formatUSDC(api.fee)))
-              : 0;
-          return bMaxPrice - aMaxPrice;
-        }
-        default:
-          return 0;
-      }
-    });
-
     return filtered;
-  }, [servers, debouncedSearchQuery, sortBy, priceFilter, selectedCategory, showFavoritesOnly, isFavorite]);
+  }, [servers, showFavoritesOnly, isFavorite]);
 
   // Update filtered servers when memoized results change
   useEffect(() => {
@@ -486,6 +463,17 @@ export function MarketplacePage() {
               />
             ))}
           </div>
+
+          {/* Pagination - only show when not filtering by favorites (server-side pagination) */}
+          {!showFavoritesOnly && pagination.total > PAGE_SIZE && (
+            <Pagination
+              total={pagination.total}
+              limit={pagination.limit}
+              offset={pagination.offset}
+              onPageChange={handlePageChange}
+              loading={loading}
+            />
+          )}
         </section>
       )}
 
