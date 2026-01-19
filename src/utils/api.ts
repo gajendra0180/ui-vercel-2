@@ -46,6 +46,7 @@ export interface ApiEntry {
   name: string;         // API name
   description: string;  // Description (required)
   fee: string;          // Fee in payment token smallest unit (e.g., "10000" = $0.01 USDC)
+  method?: 'GET' | 'POST';  // HTTP method (defaults to GET)
   createdAt: string;    // ISO timestamp
   // Note: apiUrl is NOT included - hidden from frontend for security
 }
@@ -425,7 +426,7 @@ export async function registerServer(serverData: {
   slug: string;                  // Server slug (e.g., "magpie")
   name: string;
   symbol: string;
-  apis: { slug: string; name: string; apiUrl: string; description: string; fee: string }[];
+  apis: { slug: string; name: string; apiUrl: string; description: string; fee: string; method?: 'GET' | 'POST' }[];
   builder: string;
   paymentToken: string;
   chainId?: string;              // Chain ID (e.g., "84532" or "devnet")
@@ -467,6 +468,7 @@ export async function addApiToServer(data: {
   apiUrl: string;
   description: string;
   fee: string;          // Fee in payment token smallest unit (e.g., "10000" = $0.01 USDC)
+  method?: 'GET' | 'POST';  // HTTP method (defaults to GET)
   builder: string;
 }): Promise<{ success: boolean; api?: ApiEntry; error?: string }> {
   try {

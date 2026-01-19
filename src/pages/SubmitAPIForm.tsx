@@ -91,6 +91,7 @@ export function SubmitAPIForm() {
     apiUrl: string;
     description: string;
     fee: string;  // Fee in USDC (e.g., "0.01")
+    method: 'GET' | 'POST';  // HTTP method for the API
     slugManuallyEdited?: boolean; // Track if user manually edited the slug
   }
 
@@ -152,7 +153,7 @@ export function SubmitAPIForm() {
 
   // Support multiple APIs
   const [apis, setApis] = useState<FormApiEntry[]>([
-    { slug: "", name: "", apiUrl: "", description: "", fee: "0.01", slugManuallyEdited: false }
+    { slug: "", name: "", apiUrl: "", description: "", fee: "0.01", method: "GET", slugManuallyEdited: false }
   ]);
 
   const [error, setError] = useState<string | null>(null);
@@ -219,7 +220,7 @@ export function SubmitAPIForm() {
   };
 
   const addApi = () => {
-    setApis([...apis, { slug: "", name: "", apiUrl: "", description: "", fee: "0.01", slugManuallyEdited: false }]);
+    setApis([...apis, { slug: "", name: "", apiUrl: "", description: "", fee: "0.01", method: "GET", slugManuallyEdited: false }]);
   };
 
   const removeApi = (index: number) => {
@@ -364,6 +365,7 @@ export function SubmitAPIForm() {
           slug: api.slug.trim(),
           apiUrl: api.apiUrl.trim(),
           fee: parseUnits(api.fee, 6).toString(),
+          method: api.method,
         })),
       };
 
@@ -440,6 +442,7 @@ export function SubmitAPIForm() {
           apiUrl: api.apiUrl.trim(),
           description: api.description.trim(),
           fee: parseUnits(api.fee, 6).toString(),
+          method: api.method,
         })),
         builder: solanaAddress,
         paymentToken: currentChainConfig.paymentTokenAddress,
@@ -538,6 +541,7 @@ export function SubmitAPIForm() {
             slug: api.slug.trim(),
             apiUrl: api.apiUrl.trim(),
             fee: parseUnits(api.fee, 6).toString(), // Convert to smallest unit
+            method: api.method,
           })),
         };
 
@@ -709,6 +713,7 @@ export function SubmitAPIForm() {
         apiUrl: api.apiUrl.trim(),
         description: api.description.trim(),
         fee: parseUnits(api.fee, 6).toString(), // Convert to smallest unit
+        method: api.method,
       }));
 
       // Build registration payload with slugs and chainId
@@ -954,6 +959,29 @@ export function SubmitAPIForm() {
                   required
                   className="input"
                 />
+              </div>
+
+              <div className="form-group">
+                <label>HTTP Method</label>
+                <div className="method-selector">
+                  <button
+                    type="button"
+                    className={`method-btn ${api.method === 'GET' ? 'active' : ''}`}
+                    onClick={() => handleApiChange(index, 'method', 'GET')}
+                  >
+                    GET
+                  </button>
+                  <button
+                    type="button"
+                    className={`method-btn ${api.method === 'POST' ? 'active' : ''}`}
+                    onClick={() => handleApiChange(index, 'method', 'POST')}
+                  >
+                    POST
+                  </button>
+                </div>
+                <span className="helper-text">
+                  {api.method === 'GET' ? 'Simple requests with query parameters' : 'Complex requests with JSON body'}
+                </span>
               </div>
 
               <div className="form-group">

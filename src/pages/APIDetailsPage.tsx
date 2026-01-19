@@ -36,6 +36,7 @@ export function APIDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedApiSlug, setSelectedApiSlug] = useState<string | null>(null);
   const [queryParams, setQueryParams] = useState<string>("");
+  const [requestBody, setRequestBody] = useState<string>("");
   const [metrics, setMetrics] = useState<ServerMetrics | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [solanaAddress, setSolanaAddress] = useState<string | null>(null);
@@ -170,25 +171,38 @@ export function APIDetailsPage() {
       // Build URL with server slug and API slug
       let url = buildProxyUrl(serverSlug, selectedApiSlug);
 
-      // Append query parameters if provided
-      if (queryParams.trim()) {
-        const separator = url.includes("?") ? "&" : "?";
-        url = `${url}${separator}${queryParams.trim()}`;
-      }
-
-      // Get the selected API's fee
+      // Get the selected API's fee and method
       const api = server.apis?.find(a => a.slug === selectedApiSlug);
       if (!api) {
         throw new Error("Selected API not found");
       }
       const apiFee = BigInt(api.fee);
+      const httpMethod = (api.method || 'GET') as 'GET' | 'POST';
 
-      // Call API with payment - pass chain type for proper wallet selection
+      // Append query parameters if provided (for GET requests)
+      if (httpMethod === 'GET' && queryParams.trim()) {
+        const separator = url.includes("?") ? "&" : "?";
+        url = `${url}${separator}${queryParams.trim()}`;
+      }
+
+      // Parse request body for POST requests
+      let parsedBody: unknown = undefined;
+      if (httpMethod === 'POST' && requestBody.trim()) {
+        try {
+          parsedBody = JSON.parse(requestBody);
+        } catch (e) {
+          throw new Error("Invalid JSON in request body");
+        }
+      }
+
+      // Call API with payment - pass chain type, method, and body
       const data = await callAPIWithPayment(
         url,
         apiFee,
         server.id, // receiver address (token address)
-        isSolanaServer ? "solana" : "evm"
+        isSolanaServer ? "solana" : "evm",
+        httpMethod,
+        parsedBody
       );
 
       setApiResult(data);
@@ -534,6 +548,9 @@ export function APIDetailsPage() {
                 >
                   <div className="api-item-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                      <span className={`method-badge ${(apiItem.method || 'GET').toLowerCase()}`}>
+                        {apiItem.method || 'GET'}
+                      </span>
                       <span className="api-slug-badge">/{server.slug}/{apiItem.slug}</span>
                       <button
                         className="btn btn-secondary"
@@ -704,17 +721,49 @@ print(data)`}
           )}
           
           <div className="test-form">
-            <div className="form-group">
-              <label htmlFor="queryParams">Query Parameters (optional)</label>
-              <input
-                type="text"
-                id="queryParams"
-                placeholder="e.g., page=1&limit=10"
-                value={queryParams}
-                onChange={(e) => setQueryParams(e.target.value)}
-              />
-              <small className="form-hint">Add query string parameters to append to the API URL</small>
-            </div>
+            {/* Show method badge for selected API */}
+            {selectedApi && (
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label>HTTP Method</label>
+                <span className={`method-badge ${(selectedApi.method || 'GET').toLowerCase()}`} style={{ marginLeft: '8px' }}>
+                  {selectedApi.method || 'GET'}
+                </span>
+              </div>
+            )}
+
+            {/* Query params for GET, Request body for POST */}
+            {(!selectedApi || (selectedApi.method || 'GET') === 'GET') && (
+              <div className="form-group">
+                <label htmlFor="queryParams">Query Parameters (optional)</label>
+                <input
+                  type="text"
+                  id="queryParams"
+                  placeholder="e.g., page=1&limit=10"
+                  value={queryParams}
+                  onChange={(e) => setQueryParams(e.target.value)}
+                />
+                <small className="form-hint">Add query string parameters to append to the API URL</small>
+              </div>
+            )}
+
+            {selectedApi && selectedApi.method === 'POST' && (
+              <div className="form-group">
+                <label htmlFor="requestBody">Request Body (JSON)</label>
+                <textarea
+                  id="requestBody"
+                  placeholder='{"key": "value"}'
+                  value={requestBody}
+                  onChange={(e) => setRequestBody(e.target.value)}
+                  rows={6}
+                  style={{
+                    fontFamily: 'monospace',
+                    resize: 'vertical',
+                    minHeight: '120px'
+                  }}
+                />
+                <small className="form-hint">Enter JSON body for the POST request</small>
+              </div>
+            )}
             <div className="button-group" style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
               <button
                 className="btn btn-secondary btn-large"

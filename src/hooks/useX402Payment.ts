@@ -300,7 +300,9 @@ export function useX402Payment() {
     apiUrl: string,
     fee: bigint,
     receiverAddress: string,
-    chainType?: ChainType // Optional: pre-specify chain type
+    chainType?: ChainType, // Optional: pre-specify chain type
+    httpMethod: 'GET' | 'POST' = 'GET', // HTTP method
+    requestBody?: unknown // Optional request body for POST
   ): Promise<unknown> => {
     if (!account && !chainType) {
       throw new Error("Please connect your wallet first");
@@ -311,12 +313,13 @@ export function useX402Payment() {
 
     try {
       // Step 1: Make initial API request (will return 402 if payment required)
-      console.log("Making initial API request...");
+      console.log(`Making initial API request (${httpMethod})...`);
       const initialResponse = await fetch(apiUrl, {
-        method: "GET",
+        method: httpMethod,
         headers: {
           "Content-Type": "application/json",
         },
+        body: httpMethod === 'POST' && requestBody ? JSON.stringify(requestBody) : undefined,
       });
 
       // Step 2: If payment is required (402 status), handle payment flow
@@ -371,11 +374,12 @@ export function useX402Payment() {
         const paymentHeaderName = x402Version === 2 ? "PAYMENT-SIGNATURE" : "X-PAYMENT";
 
         const response = await fetch(apiUrl, {
-          method: "GET",
+          method: httpMethod,
           headers: {
             "Content-Type": "application/json",
             [paymentHeaderName]: paymentProofBase64,
           },
+          body: httpMethod === 'POST' && requestBody ? JSON.stringify(requestBody) : undefined,
         });
 
         if (!response.ok) {
