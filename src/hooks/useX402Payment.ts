@@ -397,7 +397,16 @@ export function useX402Payment() {
           throw new Error(errorMessage);
         }
 
-        return await response.json();
+        // Parse JSON response with error handling for non-JSON responses
+        const responseText = await response.text();
+        try {
+          return JSON.parse(responseText);
+        } catch (parseError) {
+          if (responseText.startsWith('<!DOCTYPE') || responseText.startsWith('<html')) {
+            throw new Error('API returned HTML instead of JSON - the endpoint may be misconfigured');
+          }
+          throw new Error(`Failed to parse API response: ${responseText.substring(0, 100)}`);
+        }
       }
 
       // If no payment required, return the response
@@ -416,7 +425,16 @@ export function useX402Payment() {
         throw new Error(errorMessage);
       }
 
-      return await initialResponse.json();
+      // Parse JSON response with error handling for non-JSON responses
+      const initialResponseText = await initialResponse.text();
+      try {
+        return JSON.parse(initialResponseText);
+      } catch (parseError) {
+        if (initialResponseText.startsWith('<!DOCTYPE') || initialResponseText.startsWith('<html')) {
+          throw new Error('API returned HTML instead of JSON - the endpoint may be misconfigured');
+        }
+        throw new Error(`Failed to parse API response: ${initialResponseText.substring(0, 100)}`);
+      }
     } catch (err: unknown) {
       let errorMsg = "Failed to process payment";
       if (err) {
