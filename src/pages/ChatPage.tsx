@@ -549,9 +549,15 @@ export function ChatPage() {
           undefined, // chainType - auto-detect
           httpMethod,
           requestBody
-        );
+        ) as { data?: unknown; payment?: { txHash?: string }; [key: string]: unknown };
 
-        const resultMessage = `Payment successful! I paid ${paymentBtn.displayFee} for ${paymentBtn.toolDisplayName}. Here's the result: ${JSON.stringify(result, null, 2)}`;
+        // Extract transaction hash if available
+        const txHash = result?.payment?.txHash;
+        const txLink = txHash
+          ? `\n\n📜 **Transaction:** [${txHash.substring(0, 10)}...${txHash.substring(txHash.length - 8)}](https://sepolia.basescan.org/tx/${txHash})`
+          : '';
+
+        const resultMessage = `Payment successful! I paid ${paymentBtn.displayFee} for ${paymentBtn.toolDisplayName}.${txLink}\n\nHere's the result: ${JSON.stringify(result?.data || result, null, 2)}`;
 
         setMessages((prev) => [
           ...prev,
