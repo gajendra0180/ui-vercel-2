@@ -147,19 +147,26 @@ function extractAndRenderImages(text: string): { images: React.ReactNode[], clea
   let cleanedText = text;
 
   // Pattern to match base64 image data in JSON (handles various formats)
-  // Matches: "image_base64": "...", "imageBase64": "...", "image": "data:image...", etc.
+  // Pattern 1: "image_base64": "data:image/...;base64,..." (full data URL)
+  // Pattern 2: "image_base64": "iVBOR..." (raw base64)
+  // Pattern 3: "image_url" with data URL
   const base64Patterns = [
-    /"(?:image_base64|imageBase64|image_data|base64|img)"\s*:\s*"([A-Za-z0-9+/=]+)"/gi,
-    /"(?:image|data)"\s*:\s*"(data:image\/[^"]+)"/gi,
+    // Match data URLs in image_base64, imageBase64, image_data, base64 fields
+    /"(?:image_base64|imageBase64|image_data|base64)"\s*:\s*"(data:image\/[^"]+)"/gi,
+    // Match raw base64 (without data: prefix) - at least 100 chars to avoid false positives
+    /"(?:image_base64|imageBase64|image_data|base64)"\s*:\s*"([A-Za-z0-9+/=]{100,})"/gi,
   ];
 
   base64Patterns.forEach((pattern, patternIndex) => {
     let match;
-    while ((match = pattern.exec(text)) !== null) {
+    // Reset regex lastIndex for each pattern
+    pattern.lastIndex = 0;
+
+    while ((match = pattern.exec(cleanedText)) !== null) {
       const imageData = match[1];
       let src = imageData;
 
-      // Add data URL prefix if it's raw base64
+      // Add data URL prefix if it's raw base64 (doesn't start with 'data:')
       if (!imageData.startsWith('data:')) {
         // Try to detect image type from base64 header
         if (imageData.startsWith('/9j/')) {
@@ -193,7 +200,7 @@ function extractAndRenderImages(text: string): { images: React.ReactNode[], clea
       );
 
       // Remove the base64 data from text to avoid showing it as text
-      cleanedText = cleanedText.replace(match[0], `"[Image rendered below]"`);
+      cleanedText = cleanedText.replace(match[0], `"image_base64": "[Image rendered below]"`);
     }
   });
 
