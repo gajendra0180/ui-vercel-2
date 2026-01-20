@@ -44,6 +44,8 @@ interface PaymentButton {
   displayFee: string;
   tokenAddress: string;
   description: string;
+  method?: 'GET' | 'POST'; // HTTP method
+  input?: Record<string, unknown>; // Tool input for POST body
 }
 
 export function ChatPage() {
@@ -536,7 +538,18 @@ export function ChatPage() {
           },
         ]);
 
-        const result = await callAPIWithPayment(url, fee, paymentBtn.tokenAddress);
+        // Use the API's stored method and input from the tool call
+        const httpMethod = paymentBtn.method || 'GET';
+        const requestBody = httpMethod === 'POST' ? paymentBtn.input : undefined;
+
+        const result = await callAPIWithPayment(
+          url,
+          fee,
+          paymentBtn.tokenAddress,
+          undefined, // chainType - auto-detect
+          httpMethod,
+          requestBody
+        );
 
         const resultMessage = `Payment successful! I paid ${paymentBtn.displayFee} for ${paymentBtn.toolDisplayName}. Here's the result: ${JSON.stringify(result, null, 2)}`;
 
