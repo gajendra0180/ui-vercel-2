@@ -41,6 +41,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const renderContent = useCallback(() => {
     if (!content) return null;
 
+    // First, extract any base64 images from the content
+    const { images, cleanedText } = extractAndRenderImages(content);
+
     // Split by code blocks first
     const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
     const parts: React.ReactNode[] = [];
@@ -48,10 +51,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     let match;
     let codeBlockIndex = 0;
 
-    while ((match = codeBlockRegex.exec(content)) !== null) {
+    while ((match = codeBlockRegex.exec(cleanedText)) !== null) {
       // Add text before code block
       if (match.index > lastIndex) {
-        const textPart = content.slice(lastIndex, match.index);
+        const textPart = cleanedText.slice(lastIndex, match.index);
         parts.push(
           <span key={`text-${lastIndex}`}>{renderInlineMarkdown(textPart)}</span>
         );
@@ -84,15 +87,20 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     }
 
     // Add remaining text
-    if (lastIndex < content.length) {
+    if (lastIndex < cleanedText.length) {
       parts.push(
         <span key={`text-${lastIndex}`}>
-          {renderInlineMarkdown(content.slice(lastIndex))}
+          {renderInlineMarkdown(cleanedText.slice(lastIndex))}
         </span>
       );
     }
 
-    return parts.length > 0 ? parts : renderInlineMarkdown(content);
+    // Add extracted images at the end
+    if (images.length > 0) {
+      parts.push(...images);
+    }
+
+    return parts.length > 0 ? parts : renderInlineMarkdown(cleanedText);
   }, [content, copiedIndex, copyToClipboard]);
 
   return (
@@ -132,6 +140,65 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     </div>
   );
 };
+
+// Helper to detect and render base64 images from JSON content
+function extractAndRenderImages(text: string): { images: React.ReactNode[], cleanedText: string } {
+  const images: React.ReactNode[] = [];
+  let cleanedText = text;
+
+  // Pattern to match base64 image data in JSON (handles various formats)
+  // Matches: "image_base64": "...", "imageBase64": "...", "image": "data:image...", etc.
+  const base64Patterns = [
+    /"(?:image_base64|imageBase64|image_data|base64|img)"\s*:\s*"([A-Za-z0-9+/=]+)"/gi,
+    /"(?:image|data)"\s*:\s*"(data:image\/[^"]+)"/gi,
+  ];
+
+  base64Patterns.forEach((pattern, patternIndex) => {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const imageData = match[1];
+      let src = imageData;
+
+      // Add data URL prefix if it's raw base64
+      if (!imageData.startsWith('data:')) {
+        // Try to detect image type from base64 header
+        if (imageData.startsWith('/9j/')) {
+          src = `data:image/jpeg;base64,${imageData}`;
+        } else if (imageData.startsWith('iVBOR')) {
+          src = `data:image/png;base64,${imageData}`;
+        } else if (imageData.startsWith('R0lGOD')) {
+          src = `data:image/gif;base64,${imageData}`;
+        } else if (imageData.startsWith('UklGR')) {
+          src = `data:image/webp;base64,${imageData}`;
+        } else {
+          src = `data:image/png;base64,${imageData}`;
+        }
+      }
+
+      images.push(
+        <div key={`img-${patternIndex}-${images.length}`} className="chat-message__image-container">
+          <img
+            src={src}
+            alt="API generated image"
+            className="chat-message__image"
+            style={{
+              maxWidth: '100%',
+              maxHeight: '400px',
+              borderRadius: '8px',
+              marginTop: '8px',
+              marginBottom: '8px',
+            }}
+          />
+        </div>
+      );
+
+      // Remove the base64 data from text to avoid showing it as text
+      cleanedText = cleanedText.replace(match[0], `"[Image rendered below]"`);
+    }
+  });
+
+  return { images, cleanedText };
+}
 
 // Helper function for inline markdown
 function renderInlineMarkdown(text: string): React.ReactNode[] {
