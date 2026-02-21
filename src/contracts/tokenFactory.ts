@@ -1,352 +1,415 @@
 // TokenFactory contract ABI and utilities
-// Contract: 0x5a5225c2048707734d445d87532a5d442c8A6eA1
-// Implementation: 0x52e4d83d25dea4a77350a12407eb72ac82a3ea83
+// Updated for per-API fee customization
 
 import { TOKEN_FACTORY_ADDRESS } from "../constants/addresses";
 export { TOKEN_FACTORY_ADDRESS };
 
-// Complete verified ABI from BaseScan
+// Updated ABI - removed maxSubscriptionFee, updated CreateTokenParams
 export const TOKEN_FACTORY_ABI = [
   {
-    inputs: [],
-    stateMutability: "nonpayable",
-    type: "constructor",
+    "type": "constructor",
+    "inputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    inputs: [],
-    name: "InvalidAPIURL",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "InvalidNameOrSymbol",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "SubscriptionFeeTooHigh",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "TokenAlreadyExists",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "ZeroAddressNotAllowed",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "ZeroBuilder",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "ZeroMaxSubscriptionFee",
-    type: "error",
-  },
-  {
-    inputs: [],
-    name: "ZeroSubscriptionTokenAmount",
-    type: "error",
-  },
-  {
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "createToken",
+    "inputs": [
       {
-        indexed: false,
-        internalType: "uint8",
-        name: "version",
-        type: "uint8",
-      },
-    ],
-    name: "Initialized",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: false,
-        internalType: "address",
-        name: "account",
-        type: "address",
-      },
-    ],
-    name: "Paused",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: true,
-        internalType: "uint256",
-        name: "maxSubscriptionFee",
-        type: "uint256",
-      },
-    ],
-    name: "SetMaxSubscriptionFee",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: true,
-        internalType: "string",
-        name: "endpoint",
-        type: "string",
-      },
-      {
-        indexed: true,
-        internalType: "address",
-        name: "builder",
-        type: "address",
-      },
-      {
-        indexed: true,
-        internalType: "address",
-        name: "token",
-        type: "address",
-      },
-    ],
-    name: "TokenCreated",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: true,
-        internalType: "address",
-        name: "tokenImplementation",
-        type: "address",
-      },
-    ],
-    name: "TokenImplementationSet",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: false,
-        internalType: "address",
-        name: "account",
-        type: "address",
-      },
-    ],
-    name: "Unpaused",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: true,
-        internalType: "address",
-        name: "hyperpieConfig",
-        type: "address",
-      },
-    ],
-    name: "UpdatedHyperpieConfig",
-    type: "event",
-  },
-  {
-    inputs: [
-      {
-        components: [
+        "name": "params",
+        "type": "tuple",
+        "internalType": "struct IIAOTokenFactory.CreateTokenParams",
+        "components": [
           {
-            internalType: "string",
-            name: "name",
-            type: "string",
+            "name": "name",
+            "type": "string",
+            "internalType": "string"
           },
           {
-            internalType: "string",
-            name: "symbol",
-            type: "string",
+            "name": "symbol",
+            "type": "string",
+            "internalType": "string"
           },
           {
-            internalType: "string",
-            name: "apiURL",
-            type: "string",
+            "name": "serverSlug",
+            "type": "string",
+            "internalType": "string"
           },
           {
-            internalType: "address",
-            name: "builder",
-            type: "address",
+            "name": "builder",
+            "type": "address",
+            "internalType": "address"
           },
           {
-            internalType: "address",
-            name: "paymentToken",
-            type: "address",
-          },
-          {
-            internalType: "uint256",
-            name: "subscriptionFee",
-            type: "uint256",
-          },
-        ],
-        internalType: "struct IIAOTokenFactory.CreateTokenParams",
-        name: "params",
-        type: "tuple",
-      },
+            "name": "paymentToken",
+            "type": "address",
+            "internalType": "address"
+          }
+        ]
+      }
     ],
-    name: "createToken",
-    outputs: [
+    "outputs": [
       {
-        internalType: "address",
-        name: "tokenAddress",
-        type: "address",
-      },
+        "name": "tokenAddress",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    stateMutability: "nonpayable",
-    type: "function",
+    "stateMutability": "nonpayable"
   },
   {
-    inputs: [
+    "type": "function",
+    "name": "getToken",
+    "inputs": [
       {
-        internalType: "string",
-        name: "apiURL",
-        type: "string",
-      },
+        "name": "serverSlug",
+        "type": "string",
+        "internalType": "string"
+      }
     ],
-    name: "getToken",
-    outputs: [
+    "outputs": [
       {
-        internalType: "address",
-        name: "",
-        type: "address",
-      },
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    stateMutability: "view",
-    type: "function",
+    "stateMutability": "view"
   },
   {
-    inputs: [],
-    name: "hyperpieConfig",
-    outputs: [
+    "type": "function",
+    "name": "hyperpieConfig",
+    "inputs": [],
+    "outputs": [
       {
-        internalType: "contract IHyperpieConfig",
-        name: "",
-        type: "address",
-      },
+        "name": "",
+        "type": "address",
+        "internalType": "contract IHyperpieConfig"
+      }
     ],
-    stateMutability: "view",
-    type: "function",
+    "stateMutability": "view"
   },
   {
-    inputs: [
+    "type": "function",
+    "name": "initialize",
+    "inputs": [
       {
-        internalType: "address",
-        name: "_hyperpieConfig",
-        type: "address",
-      },
-      {
-        internalType: "uint256",
-        name: "_maxSubscriptionFee",
-        type: "uint256",
-      },
+        "name": "_hyperpieConfig",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    name: "initialize",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    inputs: [],
-    name: "maxSubscriptionFee",
-    outputs: [
+    "type": "function",
+    "name": "pause",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "paused",
+    "inputs": [],
+    "outputs": [
       {
-        internalType: "uint256",
-        name: "",
-        type: "uint256",
-      },
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
     ],
-    stateMutability: "view",
-    type: "function",
+    "stateMutability": "view"
   },
   {
-    inputs: [],
-    name: "pause",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "paused",
-    outputs: [
+    "type": "function",
+    "name": "paymentTokenInfo",
+    "inputs": [
       {
-        internalType: "bool",
-        name: "",
-        type: "bool",
-      },
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [
+    "outputs": [
       {
-        internalType: "uint256",
-        name: "_maxSubscriptionFee",
-        type: "uint256",
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
       },
-    ],
-    name: "setMaxSubscriptionFee",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
       {
-        internalType: "address",
-        name: "_tokenImp",
-        type: "address",
+        "name": "paymentToken",
+        "type": "address",
+        "internalType": "address"
       },
-    ],
-    name: "setTokenImplementation",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "tokenImp",
-    outputs: [
       {
-        internalType: "address",
-        name: "",
-        type: "address",
+        "name": "paymentTokenDecimals",
+        "type": "uint256",
+        "internalType": "uint256"
       },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "unpause",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
       {
-        internalType: "address",
-        name: "_hyperpieConfig",
-        type: "address",
+        "name": "graduationThreshold",
+        "type": "uint256",
+        "internalType": "uint256"
       },
+      {
+        "name": "sqrtPriceX96Token0",
+        "type": "uint160",
+        "internalType": "uint160"
+      },
+      {
+        "name": "sqrtPriceX96Token1",
+        "type": "uint160",
+        "internalType": "uint160"
+      }
     ],
-    name: "updateConfig",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
+    "stateMutability": "view"
   },
+  {
+    "type": "function",
+    "name": "setTokenImplementation",
+    "inputs": [
+      {
+        "name": "_tokenImp",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "tokenImp",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "unpause",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "updateConfig",
+    "inputs": [
+      {
+        "name": "_hyperpieConfig",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "updatePaymentTokenInfo",
+    "inputs": [
+      {
+        "name": "_paymentToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_graduationThreshold",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_sqrtPriceX96Token0",
+        "type": "uint160",
+        "internalType": "uint160"
+      },
+      {
+        "name": "_sqrtPriceX96Token1",
+        "type": "uint160",
+        "internalType": "uint160"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "Initialized",
+    "inputs": [
+      {
+        "name": "version",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Paused",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PaymentTokenInfoUpdated",
+    "inputs": [
+      {
+        "name": "paymentToken",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "graduationThreshold",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "price",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "sqrtPriceX96Token0",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "sqrtPriceX96Token1",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TokenCreated",
+    "inputs": [
+      {
+        "name": "serverSlug",
+        "type": "string",
+        "indexed": true,
+        "internalType": "string"
+      },
+      {
+        "name": "builder",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TokenImplementationSet",
+    "inputs": [
+      {
+        "name": "tokenImplementation",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Unpaused",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "UpdatedHyperpieConfig",
+    "inputs": [
+      {
+        "name": "hyperpieConfig",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "InvalidNameOrSymbol",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidServerSlug",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PaymentTokenNotSet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ServerSlugAlreadyExists",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddressNotAllowed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroBuilder",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroGraduationThreshold",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroPrice",
+    "inputs": []
+  }
 ] as const;
-

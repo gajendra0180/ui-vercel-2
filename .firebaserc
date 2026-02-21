@@ -1,0 +1,13 @@
+{
+  "projects": {
+    "default": "trim-dahlia-485008-u2"
+  },
+  "targets": {
+    "trim-dahlia-485008-u2": {
+      "hosting": {
+        "apix-frontend": ["apix-frontend"]
+      }
+    }
+  },
+  "etags": {}
+}
